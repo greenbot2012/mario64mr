@@ -18,6 +18,8 @@ hand. Your left hand reaches in, picks Mario up, and carries him out onto your d
 - **Options** in the game's pause menu: refresh rate, resolution, anti-aliasing, foveation, texture filtering,
   sharpening, sound and HUD.
 
+<p align="center"><img src="media/mario-out-of-the-game.gif" width="400" alt="Reaching into the game window, picking Mario up and setting him down on a real table, where he runs around and jumps back in"></p>
+
 By [@lucas_martinic](https://x.com/lucas_martinic).
 
 **The app contains none of Nintendo's game: no data and no code.** It needs your own copy of Super Mario 64 (US).
@@ -184,8 +186,9 @@ An Xbox controller paired with the headset works too (A = A, X / B = B, triggers
   - pinch it (or grip it with the controller) and move your hand to slide the diorama across the table;
   - pinch it with both hands (or a hand and the controller) to turn it and scale it, pulling apart or together;
   - holding it with the controller, the thumbstick up / down scales it and left / right turns it.
-- The level follows Mario up and down: when he climbs a mountain, it sinks into the table to keep him in view
-  (whatever falls below the table is cut away), and it rises back as he comes down.
+- The level follows Mario up and down, keeping him about 10 cm below your eyes (as they were when you put it down),
+  so you always see the ground under him: when he climbs a mountain it sinks into
+  the table (whatever falls below the table is cut away), and when he goes down it rises off it.
 - To leave, lift the base up off the table: the level sinks back into it and the window is back in your hand.
   Leaving the course ends the diorama too.
 
