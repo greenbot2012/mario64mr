@@ -20,7 +20,7 @@ hand. Your left hand reaches in, picks Mario up, and carries him out onto your d
 - **Options** in the game's pause menu: refresh rate, resolution, anti-aliasing, foveation, texture filtering,
   sharpening, sound and HUD.
 
-By [@lucas_martinic](https://x.com/lucas_martinic).
+By [Lucas Martinic](https://lucasmartinic.com) ([@lucas_martinic](https://x.com/lucas_martinic)).
 
 **The app contains none of Nintendo's game: no data and no code.** It needs your own copy of Super Mario 64 (US).
 The tool in this repository makes the game from your ROM on your own computer, and puts it on your headset:
