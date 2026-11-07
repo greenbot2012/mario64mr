@@ -1,5 +1,7 @@
 # Mario 64 MR
 
+<p align="center"><img src="media/mario-out-of-the-game.gif" width="400" alt="Reaching into the game window, picking Mario up and setting him down on a real table, where he runs around and jumps back in"></p>
+
 Mixed reality Super Mario 64 for Meta Quest 3, 3S and 2. A Super Mario 64 cartridge sits in your room. Stretch it
 open with your hands into a window onto the game, then play the whole game with the Touch controller in your right
 hand. Your left hand reaches in, picks Mario up, and carries him out onto your desk.
@@ -17,8 +19,6 @@ hand. Your left hand reaches in, picks Mario up, and carries him out onto your d
   around, move, turn and scale while you play.
 - **Options** in the game's pause menu: refresh rate, resolution, anti-aliasing, foveation, texture filtering,
   sharpening, sound and HUD.
-
-<p align="center"><img src="media/mario-out-of-the-game.gif" width="400" alt="Reaching into the game window, picking Mario up and setting him down on a real table, where he runs around and jumps back in"></p>
 
 By [@lucas_martinic](https://x.com/lucas_martinic).
 
