@@ -1,0 +1,157 @@
+diff -ru a/draw_objects.c b/draw_objects.c
+--- a/draw_objects.c	2026-10-11 23:44:01
++++ b/draw_objects.c	2026-10-11 23:44:02
+@@ -94,6 +94,12 @@
+ static f32 sPickObjDistance;             ///< distance between object position and cursor click location
+ static struct GdObj *sPickedObject;      ///< object selected with cursor
+ extern s32 gMarioFaceHolding; // MarioFace (shim/gd_api.c)
++// MarioFace: a second cursor (the other hand), picking and dragging its own point by the same rules
++extern struct GdControl gMarioFaceCtrl2;
++extern s32 gMarioFaceHolding2;
++struct GdObj *gMarioFacePicked2;
++s32 gMarioFaceSecondPass;
++static void mario_face_second_hand(struct ObjView *view);
+ /// Various counters and pointers set in update_view() and used in various `draw_XXX` functions
+ static struct {
+     u8 filler1[4];        // @ 801B9CE0
+@@ -1533,6 +1539,7 @@
+             }
+         }
+ 
++        mario_face_second_hand(sUpdateViewState.view);
+         drawscene(RENDER_SCENE, sUpdateViewState.view->components, sUpdateViewState.view->lights);
+     }
+ 
+@@ -1546,4 +1553,76 @@
+  * @note Not Called
+  */
+ void stub_draw_objects_1(void) {
++}
++
++
++/**
++ * MarioFace: update_view's pick-and-drag for the second cursor. The cursor fields of gGdCtrl are swapped for
++ * gMarioFaceCtrl2's while the original picking (find_closest_pickable_obj) and dragging (drag_picked_object)
++ * run, so the second hand grabs and stretches exactly like the first.
++ */
++static void mario_face_second_hand(struct ObjView *view) {
++    s32 csrX = gGdCtrl.csrX, csrY = gGdCtrl.csrY;
++    s32 dragStartX = gGdCtrl.dragStartX, dragStartY = gGdCtrl.dragStartY;
++    u8 dragging = gGdCtrl.dragging, startedDragging = gGdCtrl.startedDragging;
++    s32 pickOffset, pickDataIdx, pickDataSize, pickedObjType, i, j;
++
++    gGdCtrl.csrX = gMarioFaceCtrl2.csrX;
++    gGdCtrl.csrY = gMarioFaceCtrl2.csrY;
++    gGdCtrl.dragStartX = gMarioFaceCtrl2.dragStartX;
++    gGdCtrl.dragStartY = gMarioFaceCtrl2.dragStartY;
++    gGdCtrl.dragging = gMarioFaceCtrl2.dragging;
++    gGdCtrl.startedDragging = gMarioFaceCtrl2.startedDragging;
++
++    if (gGdCtrl.dragging) {
++        if (gd_getproperty(3, 0) != FALSE && gGdCtrl.startedDragging != FALSE) {
++            init_pick_buf(sPickBuffer, ARRAY_COUNT(sPickBuffer));
++            drawscene(FIND_PICKS, view->components, NULL);
++            pickOffset = get_cur_pickbuf_offset(sPickBuffer);
++            sPickDataTemp = 0;
++            sPickedObject = NULL;
++            sPickObjDistance = 10000000.0f;
++            pickDataIdx = 0;
++            for (i = 0; i < pickOffset; i++) {
++                pickDataSize = sPickBuffer[pickDataIdx++];
++                if (pickDataSize != 0) {
++                    pickedObjType = sPickBuffer[pickDataIdx++];
++                    if (pickDataSize >= 2) {
++                        for (j = 0; j < pickDataSize - 1; j++) {
++                            sPickDataTemp = sPickBuffer[pickDataIdx++];
++                            apply_to_obj_types_in_group(pickedObjType, (applyproc_t) find_closest_pickable_obj,
++                                                        view->components);
++                        }
++                    }
++                }
++            }
++            // The first hand keeps what it holds
++            if (sPickedObject != NULL && sPickedObject != view->pickedObj) {
++                sPickedObject->drawFlags |= OBJ_PICKED | OBJ_HIGHLIGHTED;
++                gMarioFacePicked2 = sPickedObject;
++                gGdCtrl.dragStartX = gGdCtrl.csrX = sGrabCords.x;
++                gGdCtrl.dragStartY = gGdCtrl.csrY = sGrabCords.y;
++            }
++        }
++        if (gMarioFacePicked2 != NULL && gMarioFacePicked2 != view->pickedObj) {
++            gMarioFaceSecondPass = TRUE;
++            drag_picked_object(gMarioFacePicked2);
++            gMarioFaceSecondPass = FALSE;
++            gMarioFaceHolding2 = TRUE;
++        }
++    } else if (gMarioFacePicked2 != NULL) {
++        if (gMarioFacePicked2 != view->pickedObj) gMarioFacePicked2->drawFlags &= ~(OBJ_PICKED | OBJ_HIGHLIGHTED);
++        gMarioFacePicked2 = NULL;
++    }
++
++    gMarioFaceCtrl2.csrX = gGdCtrl.csrX;
++    gMarioFaceCtrl2.csrY = gGdCtrl.csrY;
++    gMarioFaceCtrl2.dragStartX = gGdCtrl.dragStartX;
++    gMarioFaceCtrl2.dragStartY = gGdCtrl.dragStartY;
++    gGdCtrl.csrX = csrX;
++    gGdCtrl.csrY = csrY;
++    gGdCtrl.dragStartX = dragStartX;
++    gGdCtrl.dragStartY = dragStartY;
++    gGdCtrl.dragging = dragging;
++    gGdCtrl.startedDragging = startedDragging;
+ }
+diff -ru a/joints.c b/joints.c
+--- a/joints.c	2026-10-11 23:44:01
++++ b/joints.c	2026-10-11 23:44:02
+@@ -43,6 +43,9 @@
+ // forward declarations
+ void set_joint_vecs(struct ObjJoint *, f32, f32, f32);
+ 
++extern struct GdControl gMarioFaceCtrl2; // MarioFace second hand (shim/gd_api.c)
++extern struct GdObj *gMarioFacePicked2;
++
+ /**
+  * Controls movement of grabbable joints
+  */
+@@ -111,8 +114,10 @@
+     self->mat128[3][2] += self->velocity.z;
+ 
+     if (self->header.drawFlags & OBJ_PICKED) {
+-        gGdCtrl.csrX -= (gGdCtrl.csrX - gGdCtrl.dragStartX) * 0.2;
+-        gGdCtrl.csrY -= (gGdCtrl.csrY - gGdCtrl.dragStartY) * 0.2;
++        // MarioFace: pull back whichever cursor holds this joint
++        struct GdControl *ctrl = (struct GdObj *) self == gMarioFacePicked2 ? &gMarioFaceCtrl2 : &gGdCtrl;
++        ctrl->csrX -= (ctrl->csrX - ctrl->dragStartX) * 0.2;
++        ctrl->csrY -= (ctrl->csrY - ctrl->dragStartY) * 0.2;
+     }
+ 
+     // update position of attached objects
+diff -ru a/objects.c b/objects.c
+--- a/objects.c	2026-10-11 23:44:01
++++ b/objects.c	2026-10-11 23:44:02
+@@ -1763,6 +1763,9 @@
+ }
+ 
+ extern f32 gMarioFaceDragZ; // MarioFace (shim/gd_api.c)
++extern f32 gMarioFaceDragZ2;
++extern struct GdObj *gMarioFacePicked2;  // MarioFace second hand (draw_objects.c)
++extern s32 gMarioFaceSecondPass;
+ 
+ /* @ 22EDF4 for 0x300; orig name: func_80180624 */
+ void drag_picked_object(struct GdObj *inputObj) {
+@@ -1789,12 +1792,15 @@
+     displacement.x = ((f32)(ctrl->csrX - ctrl->dragStartX)) * dispMag;
+     displacement.y = ((f32) - (ctrl->csrY - ctrl->dragStartY)) * dispMag;
+     // MarioFace: a third drag axis (towards / away from the camera), driven like the stick axes by gd_api
+-    displacement.z = gMarioFaceDragZ * dispMag;
++    displacement.z = (gMarioFaceSecondPass ? gMarioFaceDragZ2 : gMarioFaceDragZ) * dispMag;
+ 
+     gd_inverse_mat4f(&gViewUpdateCamera->unkE8, &sp40);
+     gd_mat4f_mult_vec3f(&displacement, &sp40);
+ 
+     obj = inputObj;
++    if (inputObj == gMarioFacePicked2 && !gMarioFaceSecondPass) {
++        return; // MarioFace: held by the second hand, which drags it in its own pass
++    }
+     if ((inputObj->drawFlags & OBJ_PICKED) && gGdCtrl.dragging) {
+         gd_play_sfx(GD_SFX_PINCH_FACE);
+         // Note: this second sfx won't play, as it is "overwritten" by the first

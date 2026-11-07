@@ -1,0 +1,8 @@
+Mario64MRData/
+Mario64MRData-work/
+*.z64
+*.v64
+*.n64
+*.apk
+__pycache__/
+.DS_Store

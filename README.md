@@ -1,0 +1,249 @@
+# Mario 64 MR
+
+Mixed reality Super Mario 64 for Meta Quest 3, 3S and 2. A Super Mario 64 cartridge sits in your room. Stretch it
+open with your hands into a window onto the game, then play the whole game with the Touch controller in your right
+hand. Your left hand reaches in, picks Mario up, and carries him out onto your desk.
+
+- **The cartridge**: a real object in your room. Pick it up, throw it, drop it on your table, and stretch it open
+  into a window onto the game, up to four times its first size.
+- **The title screen**: the original Goddard code, compiled from the decompilation. Stretch Mario's face with
+  both hands and pull his nose out of the window.
+- **The whole game**, at the PC port's 60 fps, smoothly interpolated to the headset's 72 to 120 Hz.
+- **Mario out in your room**: pick him up out of the window and he runs on your furniture, stands on your palm,
+  and jumps back in.
+- **Head in the window**: put your head through it and you're inside the level, with the sky all around you. Look
+  back and your room is still there, through a hole in the sky.
+- **Diorama**: put the window down on a table and the whole level rises out of it, a little world you can walk
+  around, move, turn and scale while you play.
+- **Options** in the game's pause menu: refresh rate, resolution, anti-aliasing, foveation, texture filtering,
+  sharpening, sound and HUD.
+
+By [@lucas_martinic](https://x.com/lucas_martinic).
+
+**The app contains none of Nintendo's game: no data and no code.** It needs your own copy of Super Mario 64 (US).
+The tool in this repository makes the game from your ROM on your own computer, and puts it on your headset:
+
+- the game's **data** (textures, sounds), extracted from your ROM with the [sm64ex](https://github.com/sm64pc/sm64ex)
+  PC port's own tools;
+- the game's **code**, compiled for the headset from the community's public sources: the
+  [SM64 decompilation](https://github.com/n64decomp/sm64), sm64ex and [libsm64](https://github.com/libsm64/libsm64),
+  with Mario 64 MR's changes (`native/`).
+
+## What's here
+
+| | What it is |
+| --- | --- |
+| [Releases](../../releases) › `Mario64MR.apk` | The app |
+| `install_mario64mr.py` | Makes the game from your ROM and pushes it to the headset |
+| `native/` | Mario 64 MR's changes to the game's sources, applied by the tool |
+
+## You need
+
+- A Meta Quest 3, 3S or 2 in developer mode (Meta Horizon app › Devices › Developer mode), connected to your
+  computer over USB with `adb`. Allow USB debugging when the headset asks.
+- Hand tracking on (Settings › Movement tracking › Hand and body tracking), and the right Touch controller.
+- Your room set up (Settings › Physical space › Space setup), so the cartridge lands on your table and Mario can run
+  on it. The app asks for permission to use it the first time.
+- Your own **Super Mario 64 (USA)** ROM: `.z64`, `.v64` or `.n64`, SHA-1 `9bef1128717f958171a4afac3ed78ee2bb4e86ce`
+- A Mac or Linux computer (on Windows, use WSL) with `python3`, `git`, `make`, `patch` and a C compiler, and about
+  3 GB of free space.
+  - Mac: `xcode-select --install`
+  - Ubuntu / WSL: `sudo apt install build-essential git python3 unzip`
+- The Android NDK. The tool finds one installed by Android Studio, Homebrew (`brew install --cask android-ndk`) or
+  Unity. Otherwise it downloads r27c from Google the first time (about 1 GB).
+
+## Install
+
+1. Download `Mario64MR.apk` from [Releases](../../releases), and this repository (Code › Download ZIP, or
+   `git clone`).
+
+2. Install the app:
+
+   ```
+   adb install -r -g Mario64MR.apk
+   ```
+
+3. Put the headset on and keep it awake. Then make the game and push it, all in one step:
+
+   ```
+   python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push
+   ```
+
+   The first run takes 10 to 20 minutes. It downloads the sources, builds their tools, extracts the textures and
+   sounds from your ROM, compiles the game for the headset, and pushes it all into the app's folder. Everything
+   lands in `Mario64MRData/`; `Mario64MRData-work/` keeps the sources and builds, so a second run is quick. If the
+   app has never been opened, the tool opens it once so it creates its folder, then closes it.
+
+4. Open **Mario 64 MR** from the library (Unknown sources).
+
+If anything is missing, the app says so in front of you and the game won't start.
+
+### Pushing by hand
+
+To make it all without a headset connected, leave out `--push`. Later, open the app once, close it, and push:
+
+```
+D=/sdcard/Android/data/com.lucasmartinic.mario64mr/files
+adb shell mkdir -p $D/sm64/res $D/native
+adb push Mario64MRData/baserom.us.z64 $D/
+adb push Mario64MRData/sm64/res/base.zip $D/sm64/res/
+adb push Mario64MRData/native/libsm64game.so Mario64MRData/native/libgoddard.so Mario64MRData/native/libsm64.so $D/native/
+```
+
+### Your own cartridge label
+
+The app's cartridge has a plain label: the real one is Nintendo's artwork, so it can't come with the app. You can
+put your own on it, for example a photo or scan of your own cartridge's label:
+
+- a **PNG or JPEG**, **square** (1024 × 1024 looks sharp);
+- the label **in the middle**, as tall as the picture (a real label's shape fills about 87% of its width); what's
+  left at the sides doesn't show.
+
+Add it when you install:
+
+```
+python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push --label my-label.png
+```
+
+or push it on its own at any time (`label.png`, or `label.jpg` for a JPEG), and restart the app:
+
+```
+adb push my-label.png /sdcard/Android/data/com.lucasmartinic.mario64mr/files/label.png
+```
+
+To go back to the plain label, delete it:
+`adb shell rm /sdcard/Android/data/com.lucasmartinic.mario64mr/files/label.png`
+
+## Playing
+
+The right Touch controller plays the game; your left hand is for Mario. Put the controller down and both hands are
+tracked, for the two-handed moves. Pick up the left controller too and the game switches to a two-controller layout
+(put it down and it switches back).
+
+**The cartridge**
+- It floats in front of you at the start. Pinch it to pick it up (or squeeze the controller's grip on it), and let
+  go to drop it onto your table, or throw it.
+- Pinch both ends with both hands and pull apart: it stretches into a window. Or, holding it with the controller,
+  pull the trigger.
+- Squeeze the window's frame with both hands to close it back into the cartridge (or, holding the frame with the
+  controller, pull the trigger). Pinch the frame with one hand, or grip it, to move the window.
+- Your left hand and the controller's grip stretch and squeeze it too, as two hands do.
+- Holding the window with the controller, push the thumbstick up or down to make it bigger or smaller (up to four times its first size).
+
+**The title screen**
+- Pinch Mario's face to stretch it, and pull his nose out of the window. The stick and trigger move the hand cursor
+  and grab, as on the N64.
+- To start the game, click the thumbstick, pinch "PRESS START", or make the left hand's menu gesture (look at your
+  left palm and pinch).
+
+**The game: one controller** (right Touch)
+
+| Controller | N64 |
+| --- | --- |
+| Thumbstick | Stick |
+| Trigger | A (jump) |
+| A | B |
+| Grip | Z |
+| B held + thumbstick | C buttons (camera; C-down past the farthest step zooms out further) |
+| B tap (without the stick) | R |
+| Thumbstick click (or the left hand menu gesture) | Start |
+
+**The game: two controllers** (the left hand can't grab Mario while it holds a controller)
+
+| Controller | N64 |
+| --- | --- |
+| Left thumbstick | Stick |
+| Right thumbstick | C buttons (camera) |
+| Right trigger (or A) | A (jump) |
+| Right grip (or B) | B |
+| Left trigger | Z |
+| Left grip | R |
+| Thumbstick click or the left menu button | Start |
+
+An Xbox controller paired with the headset works too (A = A, X / B = B, triggers = Z and R, right stick = C).
+
+**Your left hand in the game**
+- Put your hand into the window and the game holds still while it's in there.
+- Pinch Mario to pick him up. Carry him out of the window and let go: he lands in your room and runs on it.
+  Carry him back in, or let him jump back through the window, and he's back in the game. Leaving the course brings
+  him back too.
+- Throw him by letting go mid-swing.
+- Hold your palm flat under him and he stands on it. Tilt it and he falls off.
+
+**Your head in the window**
+- Lean into the window, through its opening, and you're inside the level: look all around, the sky is a dome
+  around you. Trees and other flat sprites turn to face you.
+- Look back the way you came and you see your room through the opening. Lean back out to leave.
+
+**Diorama (tabletop)**
+- Hold the open window by its **lower part** (with your hand, or the controller's grip) and bring it down near a
+  table, desk or the floor: a glowing circle appears on the surface below.
+- Let go over the circle: the window dives into it and the level rises out of it as a diorama, about 2 m across,
+  sky and HUD gone. Play on as usual: the stick moves Mario the way you're looking.
+- The circle stays as the diorama's base, the same size whatever the diorama's:
+  - pinch it (or grip it with the controller) and move your hand to slide the diorama across the table;
+  - pinch it with both hands (or a hand and the controller) to turn it and scale it, pulling apart or together;
+  - holding it with the controller, the thumbstick up / down scales it and left / right turns it.
+- The level follows Mario up and down: when he climbs a mountain, it sinks into the table to keep him in view
+  (whatever falls below the table is cut away), and it rises back as he comes down.
+- To leave, lift the base up off the table: the level sinks back into it and the window is back in your hand.
+  Leaving the course ends the diorama too.
+
+**Options**
+
+Pause the game (START), then press **R** (one controller: tap B; two controllers: the left grip) for the options.
+Move with the stick, change with the stick left / right, A to pick, B to go back.
+
+| Option | What it does |
+| --- | --- |
+| Graphics › Refresh rate | 72, 80, 90 or 120 Hz. Higher is smoother, and harder on the headset |
+| Graphics › Resolution | The render resolution, 70% to 150%. Higher is sharper, and slower |
+| Graphics › Anti-aliasing | Smooths jagged edges: off, MSAA 2x or 4x |
+| Graphics › Foveation | Draws the edges of your view at a lower resolution, to save power: off to high |
+| Graphics › Textures | The game's textures in the distance: as the N64 drew them (they shimmer far away), or smoothed with mipmaps and anisotropic filtering |
+| Graphics › Sharpening | The headset's own sharpening of the picture |
+| Graphics › Defaults | Puts all the graphics options back as they were |
+| Sound | The music, sound effects and ambience volumes |
+| HUD | The lives, coins and stars counters on or off |
+| Bring Mario back | Puts Mario back where he last was in the game, if he gets stuck out in your room |
+
+Changes apply at once, and are kept for next time.
+
+**Recording**
+
+Use the headset's own capture (Meta button › Camera › Record video): it records the passthrough and the game together.
+
+## Quest 2
+
+It runs at 72 Hz there by default (90 Hz on Quest 3 and 3S), with more foveation, and its passthrough is black and
+white, so your room is grey around the window. If it stutters, lower the resolution or anti-aliasing in the options.
+
+## Troubleshooting
+
+- **"Mario 64 MR needs the game"**: the game isn't on the headset, or it's in the wrong place. Run the tool with
+  `--push` again, and restart the app.
+- **START does nothing**: the full game didn't start. That usually means something is missing; see above.
+  `adb logcat -s Unity` shows lines starting with `[Mario64MR]`.
+- **`not Super Mario 64 (US)`**: the tool only accepts the US release (other regions and hacks aren't supported).
+- **The tool fails building**: check that `make` and a C compiler work (`cc --version`). Then delete
+  `Mario64MRData-work/` and run it again.
+- **The cartridge falls through the table, or Mario has nothing to land on**: run Space Setup again, and allow the
+  app to use your space.
+
+## About the game
+
+Super Mario 64, Mario and Nintendo 64 are trademarks of Nintendo. Mario 64 MR is a free, non-commercial fan project.
+It is not affiliated with, endorsed or sponsored by Nintendo.
+
+- **Nothing of Nintendo's is distributed here.** The app contains none of the game's code or data, and no Nintendo
+  artwork. The game is built on your own computer from your own copy's data and the community's public sources: the
+  decompilation of the game (n64decomp/sm64), its PC port (sm64pc/sm64ex) and libsm64.
+- **No ROMs are provided, and none will be.** Use a ROM you dumped from a cartridge you own. Please don't ask for
+  ROMs, or share them, in this repository's issues.
+- It is free and always will be: it isn't sold, and there are no donations or ads.
+
+The code written for Mario 64 MR in this repository is under the MIT license (`LICENSE`); the sources the tool
+downloads keep their own terms.
+
+If you hold rights in something here and want it changed or removed, open an issue or contact
+[@lucas_martinic](https://x.com/lucas_martinic), and it will be dealt with promptly.

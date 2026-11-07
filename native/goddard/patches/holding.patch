@@ -1,0 +1,21 @@
+--- a/draw_objects.c	2026-10-11 23:06:25
++++ b/draw_objects.c	2026-10-11 23:06:25
+@@ -93,6 +93,7 @@
+ static s32 sPickDataTemp;                ///< now, only data is the object number of a selected joint
+ static f32 sPickObjDistance;             ///< distance between object position and cursor click location
+ static struct GdObj *sPickedObject;      ///< object selected with cursor
++extern s32 gMarioFaceHolding; // MarioFace (shim/gd_api.c)
+ /// Various counters and pointers set in update_view() and used in various `draw_XXX` functions
+ static struct {
+     u8 filler1[4];        // @ 801B9CE0
+@@ -1520,6 +1521,10 @@
+             }
+ 
+             find_and_drag_picked_object(sUpdateViewState.view->components);
++            // MarioFace: tell gd_api whether the cursor is holding part of the head
++            if (sUpdateViewState.view->pickedObj != NULL) {
++                gMarioFaceHolding = TRUE;
++            }
+         } else { // check for any previously picked objects, and turn off?
+             if (sUpdateViewState.view->pickedObj != NULL) {
+                 sUpdateViewState.view->pickedObj->drawFlags &= ~OBJ_PICKED;

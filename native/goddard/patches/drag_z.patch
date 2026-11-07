@@ -1,0 +1,21 @@
+--- a/objects.c	2026-10-11 23:03:28
++++ b/objects.c	2026-10-11 23:03:28
+@@ -1761,6 +1761,8 @@
+         link = link->next;
+     }
+ }
++
++extern f32 gMarioFaceDragZ; // MarioFace (shim/gd_api.c)
+ 
+ /* @ 22EDF4 for 0x300; orig name: func_80180624 */
+ void drag_picked_object(struct GdObj *inputObj) {
+@@ -1786,7 +1788,8 @@
+ 
+     displacement.x = ((f32)(ctrl->csrX - ctrl->dragStartX)) * dispMag;
+     displacement.y = ((f32) - (ctrl->csrY - ctrl->dragStartY)) * dispMag;
+-    displacement.z = 0.0f;
++    // MarioFace: a third drag axis (towards / away from the camera), driven like the stick axes by gd_api
++    displacement.z = gMarioFaceDragZ * dispMag;
+ 
+     gd_inverse_mat4f(&gViewUpdateCamera->unkE8, &sp40);
+     gd_mat4f_mult_vec3f(&displacement, &sp40);
