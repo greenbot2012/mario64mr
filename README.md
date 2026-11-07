@@ -65,7 +65,17 @@ The tool in this repository makes the game from your ROM on your own computer, a
    adb install -r -g Mario64MR.apk
    ```
 
-3. Put the headset on and keep it awake. Then make the game and push it, all in one step:
+3. Check your ROM first (it takes a second, and needs nothing else installed):
+
+   ```
+   python3 install_mario64mr.py "Super Mario 64 (USA).z64" --check
+   ```
+
+   It should say `ROM: Super Mario 64 (USA), ..., SHA-1 matches`. If not, it says what the file is instead (another
+   region, a ROM hack, a bad dump, a zipped ROM...); see [Troubleshooting](#troubleshooting). The tool always checks
+   it first anyway: with a wrong ROM, nothing is downloaded, built or sent to the headset.
+
+4. Put the headset on and keep it awake. Then make the game and push it, all in one step:
 
    ```
    python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push
@@ -76,7 +86,10 @@ The tool in this repository makes the game from your ROM on your own computer, a
    lands in `Mario64MRData/`; `Mario64MRData-work/` keeps the sources and builds, so a second run is quick. If the
    app has never been opened, the tool opens it once so it creates its folder, then closes it.
 
-4. Open **Mario 64 MR** from the library (Unknown sources).
+5. Open **Mario 64 MR** from your Library: it's under **Unknown Sources** (in the filter at the top right of the
+   Library, or its own folder on newer versions), or search the Library for "Mario". If Unknown Sources is missing
+   or empty, connect to Wi-Fi and restart the headset; or start it over USB:
+   `adb shell monkey -p com.lucasmartinic.mario64mr -c android.intent.category.LAUNCHER 1`
 
 If anything is missing, the app says so in front of you and the game won't start.
 
@@ -227,7 +240,15 @@ white, so your room is grey around the window. If it stutters, lower the resolut
   `--push` again, and restart the app.
 - **START does nothing**: the full game didn't start. That usually means something is missing; see above.
   `adb logcat -s Unity` shows lines starting with `[Mario64MR]`.
-- **`not Super Mario 64 (US)`**: the tool only accepts the US release (other regions and hacks aren't supported).
+- **The ROM is turned down**: the tool only takes an unmodified dump of **Super Mario 64 (USA)**, and says why not:
+  - *Japan / Europe / Shindou edition*: only the USA release is supported (the game is built from the
+    decompilation's US version).
+  - *contents differ* or *24 MB / 64 MB instead of 8 MB*: a ROM hack, a patched or trainer ROM, or a bad dump.
+    Use a clean dump of your cartridge.
+  - *a .zip / .7z archive*: extract it, and give the `.z64`, `.v64` or `.n64` file inside.
+  - *not a Nintendo 64 ROM* or *an N64 ROM of ...*: the wrong file.
+
+  `.z64`, `.v64` and `.n64` byte orders all work; the SHA-1 is checked as `.z64`.
 - **The tool fails building**: check that `make` and a C compiler work (`cc --version`). Then delete
   `Mario64MRData-work/` and run it again.
 - **The cartridge falls through the table, or Mario has nothing to land on**: run Space Setup again, and allow the

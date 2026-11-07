@@ -20,10 +20,12 @@ usage:
     python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push     # ...and adb pushes it to the headset
     python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push --label my-label.png
                                                                        # ...with your own cartridge label
+    python3 install_mario64mr.py "Super Mario 64 (USA).z64" --check    # only checks the ROM
 
 Needs python3, git, make, patch, unzip and a C compiler (macOS: Xcode command line tools; Linux: build-essential;
 Windows: WSL). The Android NDK (r27c) is found where Android Studio or Homebrew put it, or downloaded (~1 GB) the
-first time. The ROM may be .z64, .v64 or .n64; it must be the US release (SHA-1 9bef1128...).
+first time. The ROM may be .z64, .v64 or .n64; it must be the unmodified US release (SHA-1 9bef1128...), checked
+before anything else: a different region, a ROM hack, a bad dump or a zipped ROM is turned down with the reason.
 """
 import argparse
 import glob
@@ -64,19 +66,72 @@ def run(cmd, cwd=None, env=None):
     subprocess.run([str(c) for c in cmd], cwd=cwd, check=True, env=env)
 
 
+ROM_SIZE = 8 * 1024 * 1024
+ROM_ORDERS = {  # the first word of an N64 ROM, as each kind of dump stores it
+    b"\x80\x37\x12\x40": ".z64 (big-endian)",
+    b"\x37\x80\x40\x12": ".v64 (byte-swapped)",
+    b"\x40\x12\x37\x80": ".n64 (little-endian)",
+}
+REGIONS = {"E": "USA", "J": "Japan", "P": "Europe"}
+ARCHIVES = {b"PK\x03\x04": "a .zip", b"7z\xbc\xaf": "a .7z", b"Rar!": "a .rar", b"\x1f\x8b": "a .gz"}
+
+
+class RomError(Exception):
+    pass
+
+
+def rom_problem(path, message, hint):
+    return RomError(f"{path}: {message}\n  {hint}\n  Nothing was built or sent to the headset.")
+
+
+def describe_rom(rom):
+    """What an N64 ROM's header says it is (in .z64 order): its name, game code, region and revision."""
+    name = rom[0x20:0x34].decode("ascii", "replace").strip(" \0")
+    code = rom[0x3B:0x3F].decode("ascii", "replace")
+    region = REGIONS.get(code[3:], f"region '{code[3:]}'")
+    if code == "NSMJ" and rom[0x3F] == 3:
+        region = "Japan, Shindou edition"
+    return name, code, region, rom[0x3F]
+
+
 def read_rom(path):
-    """The ROM in .z64 byte order (big-endian), from any of the three dump orders."""
-    rom = bytearray(path.read_bytes())
-    head = bytes(rom[:4])
-    if head == b"\x37\x80\x40\x12":  # .v64: byte-swapped pairs
+    """The ROM in .z64 byte order (big-endian), from any of the three dump orders, checked to be exactly the
+    unmodified US release, with a clear reason when it isn't (before anything is downloaded, built or pushed)."""
+    if not path.is_file():
+        raise rom_problem(path, "no such file", "Give the path to your ROM file (in quotes if it has spaces).")
+    data = path.read_bytes()
+    head = data[:4]
+    for magic, kind in ARCHIVES.items():
+        if head.startswith(magic):
+            raise rom_problem(path, f"this is {kind} archive, not a ROM",
+                              "Extract it first, and give the .z64 / .v64 / .n64 file inside.")
+    order = ROM_ORDERS.get(head)
+    if order is None:
+        raise rom_problem(path, "not a Nintendo 64 ROM (its header isn't one)",
+                          "Use a Super Mario 64 (USA) dump: a .z64, .v64 or .n64 file of about 8 MB.")
+    rom = bytearray(data)
+    if order.startswith(".v64"):
         rom[0::2], rom[1::2] = rom[1::2], rom[0::2]
-    elif head == b"\x40\x12\x37\x80":  # .n64: little-endian words
+    elif order.startswith(".n64"):
         for i in range(0, len(rom) - 3, 4):
             rom[i:i + 4] = rom[i:i + 4][::-1]
     rom = bytes(rom)
-    if hashlib.sha1(rom).hexdigest() != US_SHA1:
-        sys.exit(f"{path}: not Super Mario 64 (US): SHA-1 {hashlib.sha1(rom).hexdigest()}, expected {US_SHA1}")
-    return rom
+    sha1 = hashlib.sha1(rom).hexdigest()
+    if sha1 == US_SHA1:
+        print(f"ROM: Super Mario 64 (USA), {order}, SHA-1 matches", flush=True)
+        return rom
+    name, code, region, revision = describe_rom(rom)
+    expected = f"An unmodified Super Mario 64 (USA) dump has SHA-1 {US_SHA1} (as .z64)."
+    if code[1:3] != "SM" or "MARIO" not in name.upper():
+        raise rom_problem(path, f"this is an N64 ROM of \"{name}\" (game code {code}), not Super Mario 64", expected)
+    if code != "NSME":
+        raise rom_problem(path, f"this is Super Mario 64 ({region}): only the USA release is supported",
+                          "The game is built from the decompilation's US version, which needs the US ROM. " + expected)
+    if len(rom) != ROM_SIZE:
+        raise rom_problem(path, f"Super Mario 64 (USA) by its header, but {len(rom) / 1048576:.0f} MB instead of 8 MB: "
+                          "a ROM hack (they're often extended) or a bad dump", expected)
+    raise rom_problem(path, f"Super Mario 64 (USA) by its header, but its contents differ (SHA-1 {sha1}): "
+                      "a ROM hack, a patched or trainer ROM, or a bad dump", expected)
 
 
 def fetch(url, revision, work, shallow=False):
@@ -321,11 +376,18 @@ def main():
     parser.add_argument("--ndk", type=Path, help="an Android NDK to use (else found, or downloaded)")
     parser.add_argument("--push", action="store_true", help="also adb push it to the headset")
     parser.add_argument("--label", type=Path, help="your own cartridge label: a square PNG or JPEG (see the README)")
+    parser.add_argument("--check", action="store_true", help="only check the ROM, and stop")
     args = parser.parse_args()
+    # The ROM first: the most likely thing to be wrong, and nothing should be fetched, built or pushed until it's right
+    try:
+        rom = read_rom(args.rom)
+    except RomError as problem:
+        sys.exit(str(problem))
+    if args.check:
+        return
     for tool in ("git", "make", "patch", "cc") + (("unzip",) if platform.system() == "Linux" else ()):
         if shutil.which(tool) is None:
             sys.exit(f"{tool} not found (see the top of this script for what is needed)")
-    rom = read_rom(args.rom)
     work, out = args.work.resolve(), args.out.resolve()
     sm64ex = work / "sm64ex"
     (out / "native").mkdir(parents=True, exist_ok=True)
