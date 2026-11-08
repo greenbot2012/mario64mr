@@ -22,8 +22,8 @@ usage:
                                                                        # ...with your own cartridge label
     python3 install_mario64mr.py "Super Mario 64 (USA).z64" --check    # only checks the ROM
 
-Needs python3, git, make, patch, unzip and a C compiler (macOS: Xcode command line tools; Linux: build-essential;
-Windows: WSL). The Android NDK (r27c) is found where Android Studio or Homebrew put it, or downloaded (~1 GB) the
+Needs python3, git, make, patch and a C compiler (macOS: Xcode command line tools; Linux: build-essential;
+Windows: WSL). The Android NDK (r27c) is found where Android Studio or Homebrew put it, or downloaded (~700 MB) the
 first time. The ROM may be .z64, .v64 or .n64; it must be the unmodified US release (SHA-1 9bef1128...), checked
 before anything else: a different region, a ROM hack, a bad dump or a zipped ROM is turned down with the reason.
 """
@@ -34,6 +34,7 @@ import os
 import platform
 import re
 import shutil
+import stat
 import struct
 import subprocess
 import sys
@@ -212,7 +213,8 @@ def find_ndk(work, given):
     home = Path.home()
     for pattern in (home / "Library/Android/sdk/ndk/*", home / "Android/Sdk/ndk/*",
                     "/opt/homebrew/share/android-ndk", "/usr/local/share/android-ndk",
-                    "/Applications/Unity/Hub/Editor/*/PlaybackEngines/AndroidPlayer/NDK", work / "ndk"):
+                    "/Applications/Unity/Hub/Editor/*/PlaybackEngines/AndroidPlayer/NDK", ndk_home(work) / "ndk",
+                    work / "ndk"):
         candidates += sorted(glob.glob(str(pattern)), reverse=True)
     for c in candidates:
         if c and ndk_compiler(c).is_file():
@@ -221,17 +223,94 @@ def find_ndk(work, given):
     return download_ndk(work)
 
 
+def on_windows_drive(path):
+    """A path on a Windows drive under WSL (/mnt/c/...): slow, and Windows' path length limit applies."""
+    return Path(path).resolve().as_posix().startswith("/mnt/") and "microsoft" in platform.uname().release.lower()
+
+
+WINDOWS_PATH_LIMIT = 260  # (MAX_PATH, as C:\... counts it)
+
+
+def ndk_home(work):
+    """Where a downloaded NDK goes: with the work folder, unless that's on a Windows drive under WSL, where its long
+    paths can go past Windows' limit and its 1 GB of small files take ages: then in the Linux home."""
+    return Path.home() / ".cache/mario64mr" if on_windows_drive(work) else work
+
+
+class Progress:
+    """Prints how far along something long is, every 5%, so it never looks stuck."""
+
+    def __init__(self, what):
+        self.what, self.shown = what, -1
+
+    def __call__(self, done, total):
+        if total <= 0:
+            return
+        step = min(100, done * 100 // total) // 5 * 5
+        if step != self.shown:
+            self.shown = step
+            print(f"  {self.what}: {step}%", flush=True)
+
+
+def extract_ndk_zip(archive, unpacked):
+    """Unzips the NDK with its executable bits and symlinks, showing progress, and stops with the reason (rather than
+    hanging, or going on half unpacked) when a file can't be written: on a Windows drive, usually the path length."""
+    with zipfile.ZipFile(archive) as z:
+        entries = z.infolist()
+        if on_windows_drive(unpacked):
+            longest = max(entries, key=lambda e: len(e.filename))
+            # (/mnt/c/... is C:\..., 4 characters fewer)
+            length = len((unpacked / longest.filename).as_posix()) - 4
+            if length >= WINDOWS_PATH_LIMIT:
+                sys.exit(f"Can't unpack the Android NDK in {unpacked}: its longest path would be {length} characters "
+                         f"there, past Windows' limit of {WINDOWS_PATH_LIMIT - 1}.\n"
+                         f"  Run the tool from your WSL home instead (cd ~), or give a shorter --work folder.")
+        total, done = sum(e.file_size for e in entries), 0
+        progress = Progress("Unpacking the Android NDK")
+        root = unpacked.resolve()
+        for entry in entries:
+            path = unpacked / entry.filename
+            if root not in path.resolve().parents and path.resolve() != root:
+                sys.exit(f"{archive}: unexpected path inside it: {entry.filename}")
+            mode = entry.external_attr >> 16
+            try:
+                if entry.is_dir():
+                    path.mkdir(parents=True, exist_ok=True)
+                    continue
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if stat.S_ISLNK(mode):
+                    os.symlink(z.read(entry).decode(), path)
+                else:
+                    with z.open(entry) as source, open(path, "wb") as file:
+                        shutil.copyfileobj(source, file, 1 << 20)
+                    if mode & 0o777:
+                        os.chmod(path, mode & 0o777)
+            except OSError as error:
+                hint = ("On a Windows drive this is usually Windows' path length limit: run the tool from your WSL home "
+                        "(cd ~), or give a shorter --work folder." if on_windows_drive(unpacked) else
+                        "Check there's enough free space (the NDK needs about 2 GB unpacked), or give another --work folder.")
+                sys.exit(f"Unpacking the Android NDK failed at {path} ({len(path.as_posix())} characters):\n"
+                         f"  {error}\n  {hint}")
+            done += entry.file_size
+            progress(done, total)
+
+
 def download_ndk(work):
     system = platform.system()
     name = f"android-ndk-{NDK_VERSION}-" + ("darwin.dmg" if system == "Darwin" else "linux.zip")
     url = "https://dl.google.com/android/repository/" + name
-    archive = work / name
+    home = ndk_home(work)
+    home.mkdir(parents=True, exist_ok=True)
+    if home != work:
+        print(f"The Android NDK goes in {home} (your work folder is on a Windows drive, where it wouldn't fit)")
+    archive = home / name
     if not archive.is_file():
-        print(f"Downloading the Android NDK ({url}, about 1 GB)...", flush=True)
+        print(f"Downloading the Android NDK ({url}, about 700 MB)...", flush=True)
         part = archive.with_suffix(".part")
-        urllib.request.urlretrieve(url, part)
+        progress = Progress("Downloading the Android NDK")
+        urllib.request.urlretrieve(url, part, lambda blocks, size, total: progress(blocks * size, total))
         part.rename(archive)
-    target = work / "ndk"
+    target = home / "ndk"
     shutil.rmtree(target, ignore_errors=True)
     if system == "Darwin":
         mount = work / "ndk-mount"
@@ -245,9 +324,9 @@ def download_ndk(work):
         finally:
             run(["hdiutil", "detach", mount])
     else:
-        unpacked = work / "ndk-unpacked"
+        unpacked = home / "ndk-unpacked"
         shutil.rmtree(unpacked, ignore_errors=True)
-        run(["unzip", "-q", archive, "-d", unpacked])  # (unzip keeps the tools' executable bits)
+        extract_ndk_zip(archive, unpacked)
         (unpacked / f"android-ndk-{NDK_VERSION}").rename(target)
         shutil.rmtree(unpacked)
     if not ndk_compiler(target).is_file():
@@ -385,10 +464,13 @@ def main():
         sys.exit(str(problem))
     if args.check:
         return
-    for tool in ("git", "make", "patch", "cc") + (("unzip",) if platform.system() == "Linux" else ()):
+    for tool in ("git", "make", "patch", "cc"):
         if shutil.which(tool) is None:
             sys.exit(f"{tool} not found (see the top of this script for what is needed)")
     work, out = args.work.resolve(), args.out.resolve()
+    if on_windows_drive(work):
+        print(f"Note: {work} is on a Windows drive. It works, but building there is much slower than in your WSL "
+              "home: cd ~ and run the tool from there.", flush=True)
     sm64ex = work / "sm64ex"
     (out / "native").mkdir(parents=True, exist_ok=True)
     if args.label:

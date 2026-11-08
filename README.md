@@ -50,9 +50,11 @@ The tool in this repository makes the game from your ROM on your own computer, a
 - A Mac or Linux computer (on Windows, use WSL) with `python3`, `git`, `make`, `patch` and a C compiler, and about
   3 GB of free space.
   - Mac: `xcode-select --install`
-  - Ubuntu / WSL: `sudo apt install build-essential git python3 unzip`
+  - Ubuntu / WSL: `sudo apt install build-essential git python3`
+  - On Windows, put this repository in your WSL home (`cd ~`, then `git clone` it there) rather than on a Windows
+    drive (`/mnt/c/...`): building there is much slower, and long paths can go past Windows' limit.
 - The Android NDK. The tool finds one installed by Android Studio, Homebrew (`brew install --cask android-ndk`) or
-  Unity. Otherwise it downloads r27c from Google the first time (about 1 GB).
+  Unity. Otherwise it downloads r27c from Google the first time (about 700 MB, 2 GB unpacked).
 
 ## Install
 
@@ -249,6 +251,8 @@ white, so your room is grey around the window. If it stutters, lower the resolut
   - *not a Nintendo 64 ROM* or *an N64 ROM of ...*: the wrong file.
 
   `.z64`, `.v64` and `.n64` byte orders all work; the SHA-1 is checked as `.z64`.
+- **Unpacking the Android NDK fails** (on Windows): the tool says why. It's almost always the path being too long
+  for Windows: run the tool from your WSL home (`cd ~`) instead of a Windows drive (`/mnt/c/...`).
 - **The tool fails building**: check that `make` and a C compiler work (`cc --version`). Then delete
   `Mario64MRData-work/` and run it again.
 - **The cartridge falls through the table, or Mario has nothing to land on**: run Space Setup again, and allow the
