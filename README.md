@@ -282,11 +282,12 @@ make from your ROM is the same for both headsets; only the app is different.
 
 What's different from the Quest:
 
-- **No hand tracking** on the Frame, so Mario stays in the game: you can't pick him up and carry him out into your
-  room. You play with both controllers, the Quest's two-controller layout: left stick moves, right stick is the
-  camera (C buttons), right trigger or A jumps (A), right grip or B is B, left trigger is Z, left grip is R, and
-  START is a thumbstick click or the left menu button. The right grip picks up the cartridge and the window; while
-  you hold it, the right trigger opens or closes it, and the right stick resizes it.
+- **No hand tracking** on the Frame, so the **left controller is your left hand**: reach into the window and
+  hold its grip to pick Mario up, carry him out and let go to put him down (or throw him). There are no white gloves,
+  and he can't stand on your palm. You play with both controllers: left stick moves, right stick is the camera
+  (C buttons), right trigger or A jumps (A), right grip or B is B, left trigger is Z, left X or Y is R, and START is
+  a thumbstick click or the left menu button. The right grip picks up the cartridge and the window; while you hold
+  it, the right trigger opens or closes it, and the right stick resizes it.
 - **No room scan**, so the cartridge lands on the floor, not on your table.
 - **Grey passthrough**: the Frame's cameras are black and white.
 - In the options, **refresh rate** and **sharpening** do nothing: the Frame runs at its own rate.
