@@ -20,7 +20,14 @@ hand. Your left hand reaches in, picks Mario up, and carries him out onto your d
 - **Options** in the game's pause menu: refresh rate, resolution, anti-aliasing, foveation, texture filtering,
   sharpening, sound and HUD.
 
-By [Lucas Martinic](https://lucasmartinic.com) ([@lucas_martinic](https://x.com/lucas_martinic)).
+By [Lucas Martinic](https://lucasmartinic.com): [X @lucas_martinic](https://x.com/lucas_martinic) ·
+[Instagram @lucasmartinic](https://www.instagram.com/lucasmartinic/) ·
+[LinkedIn](https://www.linkedin.com/in/lucas-martinic)
+
+> **Sharing a clip?** I'd love to see it! If you post videos or photos of Mario 64 MR, please tag me
+> ([@lucas_martinic](https://x.com/lucas_martinic) on X, [@lucasmartinic](https://www.instagram.com/lucasmartinic/)
+> on Instagram, [Lucas Martinic](https://www.linkedin.com/in/lucas-martinic) on LinkedIn). This took a lot of
+> work to put together, and seeing Mario running around your rooms makes it all worth it. Thank you!
 
 **The app contains none of Nintendo's game: no data and no code.** It needs your own copy of Super Mario 64 (US).
 The tool in this repository makes the game from your ROM on your own computer, and puts it on your headset:
