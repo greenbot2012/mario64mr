@@ -15,7 +15,9 @@ To start over, delete that folder.
 param(
     [string]$Rom,          # your ROM (else a file dialog asks for it)
     [switch]$NoPush,       # make the game but don't send it to the headset
-    [switch]$Check         # only check the ROM
+    [switch]$Check,        # only check the ROM
+    [string]$Frame         # a Steam Frame's hostname or IP address, to send it there over Wi-Fi (with the Frame's
+                           # app, Mario64MR-SteamFrame.apk, it's "frame" unless given)
 )
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"  # (downloads are many times slower with PowerShell's progress bar)
@@ -145,6 +147,8 @@ if (-not $NoPush) {
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if ($apk) { Write-Host "The app: $($apk.FullName) (installed on the headset with the game)" }
     else { Write-Host "No Mario64MR.apk here or in Downloads: if the app isn't on the headset yet, download it from the Releases page first." -ForegroundColor Yellow }
+    if (-not $Frame -and $apk -and $apk.Name -like "*SteamFrame*") { $Frame = "frame" }
+    if ($Frame) { Write-Host "To the Steam Frame at $Frame, over Wi-Fi: start Lepton Development on it (Developer Mode on)." -ForegroundColor Cyan }
 }
 
 # 4. Make the game, and send it to the headset
@@ -154,6 +158,7 @@ $env:M64_ROM = $Rom
 $env:M64_WORK = Join-Path $Root "work"
 $env:M64_ADB = if ($adbDir) { $adbDir } else { "" }
 $env:M64_PUSH = if ($NoPush) { "" } else { "1" }
+$env:M64_FRAME = if ($Frame -and -not $NoPush) { $Frame } else { "" }
 # (a script, the paths in the environment: Windows PowerShell drops quotes inside the arguments it passes)
 & $Bash -l (Join-Path $PSScriptRoot "make_game.sh").Replace('\', '/')
 if ($LASTEXITCODE -ne 0) { Fail "Making the game failed (see above). Running install_mario64mr.bat again picks up where it stopped." }

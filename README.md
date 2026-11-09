@@ -2,7 +2,8 @@
 
 <p align="center"><img src="media/mario-out-of-the-game.gif" width="400" alt="Reaching into the game window, picking Mario up and setting him down on a real table, where he runs around and jumps back in"></p>
 
-Mixed reality Super Mario 64 for Meta Quest 3, 3S and 2. A Super Mario 64 cartridge sits in your room. Stretch it
+Mixed reality Super Mario 64 for Meta Quest 3, 3S and 2 (and, experimental, the
+[Steam Frame](#steam-frame-experimental)). A Super Mario 64 cartridge sits in your room. Stretch it
 open with your hands into a window onto the game, then play the whole game with the Touch controller in your right
 hand. Your left hand reaches in, picks Mario up, and carries him out onto your desk.
 
@@ -43,6 +44,7 @@ The tool in this repository makes the game from your ROM on your own computer, a
 | | What it is |
 | --- | --- |
 | [Releases](../../releases) › `Mario64MR.apk` | The app |
+| [Releases](../../releases) › `Mario64MR-SteamFrame.apk` | The app for the Steam Frame ([experimental](#steam-frame-experimental)) |
 | `install_mario64mr.bat` | On Windows: double-click it, and it does everything below for you |
 | `install_mario64mr.py` | Makes the game from your ROM and pushes it to the headset |
 | `native/` | Mario 64 MR's changes to the game's sources, applied by the tool |
@@ -268,6 +270,47 @@ Use the headset's own capture (Meta button › Camera › Record video): it reco
 
 It runs at 72 Hz there by default (90 Hz on Quest 3 and 3S), with more foveation, and its passthrough is black and
 white, so your room is grey around the window. If it stutters, lower the resolution or anti-aliasing in the options.
+
+## Steam Frame (experimental)
+
+Valve's Steam Frame has its own app: **`Mario64MR-SteamFrame.apk`** in [Releases](../../releases). The game you
+make from your ROM is the same for both headsets; only the app is different.
+
+> **Not tested on a Steam Frame yet.** I don't have one: the app is built from Valve's documentation for its
+> Android support (Lepton) and OpenXR. If you try it, please [open an issue](../../issues) saying how it went, with
+> the `[Mario64MR]` lines from `adb logcat -s Unity` if something's wrong.
+
+What's different from the Quest:
+
+- **No hand tracking** on the Frame, so Mario stays in the game: you can't pick him up and carry him out into your
+  room. You play with both controllers, the Quest's two-controller layout: left stick moves, right stick is the
+  camera (C buttons), right trigger or A jumps (A), right grip or B is B, left trigger is Z, left grip is R, and
+  START is a thumbstick click or the left menu button. The right grip picks up the cartridge and the window; while
+  you hold it, the right trigger opens or closes it, and the right stick resizes it.
+- **No room scan**, so the cartridge lands on the floor, not on your table.
+- **Grey passthrough**: the Frame's cameras are black and white.
+- In the options, **refresh rate** and **sharpening** do nothing: the Frame runs at its own rate.
+
+To install it:
+
+1. On the Frame, turn on Developer Mode, then start **Lepton Development** from your Library (an Android home
+   screen opens). Keep the Frame on the same Wi-Fi as your computer.
+2. Make the game and send it to the Frame along with the app:
+   - **Windows**: put `Mario64MR-SteamFrame.apk` in your Downloads (or in this repository's folder), then
+     double-click `install_mario64mr.bat`. When the APK it finds is the Steam Frame one, it sends everything to the
+     Frame over Wi-Fi, at its hostname `frame`. If the Frame has another hostname, or `frame` isn't found, run it
+     from a terminal with the Frame's IP address (Quick Settings › Wi-Fi):
+     `install_mario64mr.bat -Frame 192.168.1.23`
+   - **Mac or Linux**:
+
+     ```
+     python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push --frame --apk Mario64MR-SteamFrame.apk
+     ```
+
+     Or `--frame 192.168.1.23` with the Frame's IP address.
+3. Start Mario 64 MR from Lepton Development's home screen.
+
+To push by hand instead, `adb connect frame` first, then follow [Pushing by hand](#pushing-by-hand).
 
 ## Troubleshooting
 

@@ -21,6 +21,8 @@ usage:
     python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push --label my-label.png
                                                                        # ...with your own cartridge label
     python3 install_mario64mr.py "Super Mario 64 (USA).z64" --check    # only checks the ROM
+    python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push --frame --apk Mario64MR-SteamFrame.apk
+                                                                       # ...to a Steam Frame, over Wi-Fi
 
 Needs python3, git, make, patch and a C compiler (macOS: Xcode command line tools; Linux: build-essential;
 Windows: WSL). The Android NDK (r27c) is found where Android Studio or Homebrew put it, or downloaded (~700 MB) the
@@ -455,10 +457,30 @@ def add_label(picture, out):
     shutil.copy2(picture, out / ("label" + (".png" if ext == ".png" else ".jpg")))
 
 
-def push(out, wait=False, apk=None):
+def connect_frame(host, wait):
+    """The Steam Frame, over Wi-Fi: its Android apps run in Lepton, which adb reaches as host:5555 (the headset's
+    hostname is frame unless you changed it; its IP address works too). Every adb command after goes to it."""
+    serial = host if ":" in host else host + ":5555"
+    os.environ["ANDROID_SERIAL"] = serial
+    while True:
+        result = subprocess.run(["adb", "connect", serial], capture_output=True, text=True)
+        said = result.stdout.strip() or result.stderr.strip()  # (stderr has adb's own "daemon started" too)
+        if result.returncode == 0 and "connected to" in said:
+            print(said)
+            return
+        if not wait:
+            sys.exit(f"No Steam Frame at {serial} ({said}): turn on Developer Mode, start Lepton Development from "
+                     "your Library, and run again (or give its IP address: --frame 192.168.1.23)")
+        input(f"\nNo Steam Frame at {serial} ({said}).\nOn the Frame: Developer Mode on, then start Lepton Development "
+              "from your Library (an Android home screen opens).\nSame Wi-Fi as this computer. Then press Enter here... ")
+
+
+def push(out, wait=False, apk=None, frame=None):
     if MSYS:
         # adb is a Windows program: MSYS2 would turn its headset paths (/sdcard/...) into Windows ones
         os.environ["MSYS2_ARG_CONV_EXCL"] = "*"
+    if frame:
+        connect_frame(frame, wait)
     while True:
         devices = subprocess.run(["adb", "devices"], capture_output=True, text=True, check=True).stdout
         if "\tdevice" in devices:
@@ -493,7 +515,10 @@ def push(out, wait=False, apk=None):
         run(["adb", "shell", "rm", "-f", DEVICE_FOLDER + "/label.png", DEVICE_FOLDER + "/label.jpg"])
         run(["adb", "push", native(labels[0]), DEVICE_FOLDER + "/"])
     run(["adb", "shell", "am", "force-stop", PACKAGE])
-    print("On the headset. Start Mario 64 MR from your Library (Unknown Sources, or search for \"Mario\").")
+    if frame:
+        print("On the Steam Frame. Start Mario 64 MR from Lepton Development's home screen.")
+    else:
+        print("On the headset. Start Mario 64 MR from your Library (Unknown Sources, or search for \"Mario\").")
 
 
 def main():
@@ -508,6 +533,9 @@ def main():
     parser.add_argument("--check", action="store_true", help="only check the ROM, and stop")
     parser.add_argument("--wait", action="store_true", help="with --push: if no headset is connected, wait for it")
     parser.add_argument("--apk", type=Path, help="with --push: also install the app (Mario64MR.apk) on the headset")
+    parser.add_argument("--frame", nargs="?", const="frame", metavar="HOST",
+                        help="with --push: send it to a Steam Frame over Wi-Fi (its hostname, frame unless you changed "
+                             "it, or its IP address), with Lepton Development running on it")
     args = parser.parse_args()
     # The ROM first: the most likely thing to be wrong, and nothing should be fetched, built or pushed until it's right
     try:
@@ -548,7 +576,7 @@ def main():
         print(f"{out / 'native' / name}: {(out / 'native' / name).stat().st_size / 1e6:.1f} MB")
 
     if args.push:
-        push(out, args.wait, args.apk)
+        push(out, args.wait, args.apk, args.frame)
     else:
         print(f"Done: {out}. To the headset: python3 {Path(sys.argv[0]).name} <rom> --push  (or the README's adb push)")
 
