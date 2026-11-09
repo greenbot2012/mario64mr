@@ -75,7 +75,8 @@ The tool in this repository makes the game from your ROM on your own computer, a
    it, and leave the APK in your Downloads (or put it in the unzipped folder).
 
 2. Double-click **`install_mario64mr.bat`**, and choose your ROM when it asks. If Windows says it protected your PC,
-   click More info › Run anyway.
+   click More info › Run anyway. If Microsoft Defender calls it a Trojan (`Trojan:Script/Sabsik.EN.A!ml`), that's a
+   false alarm: see [Troubleshooting](#troubleshooting).
 
    - It checks your ROM first: with a wrong one, it says what's wrong and stops before downloading anything.
    - The first time, it sets up its own build tools (MSYS2, the Android NDK and adb) in
@@ -270,6 +271,21 @@ white, so your room is grey around the window. If it stutters, lower the resolut
 
 ## Troubleshooting
 
+- **Microsoft Defender says `Trojan:Script/Sabsik.EN.A!ml`** for `install_mario64mr.bat` (or the downloaded ZIP),
+  and blocks or removes it: a false alarm. The `!ml` means it's a machine-learning guess, not a match with any known
+  virus. The installer looks like one to it because it starts PowerShell and downloads programs to run, which is
+  just what it does to set up its build tools. Don't take my word for it; both files are plain text you can read in
+  Notepad:
+  - `install_mario64mr.bat` is six lines: it starts `windows\install_mario64mr.ps1`, and nothing else.
+  - `windows\install_mario64mr.ps1` downloads only from MSYS2's releases on GitHub (`github.com/msys2`) and from
+    Google (`dl.google.com`: adb), and installs MSYS2's packages (make, git, Python...) from MSYS2's mirrors. Then
+    `install_mario64mr.py` fetches the game's public sources from GitHub (`sm64pc/sm64ex`, `n64decomp/sm64`,
+    `libsm64/libsm64`) and the Android NDK from Google.
+
+  Once you've looked, get the file back: Windows Security › Virus & threat protection › Protection history, open
+  the item, and Actions › Restore (or Allow). You can also report it to Microsoft as a false positive at
+  [microsoft.com/wdsi/filesubmission](https://www.microsoft.com/en-us/wdsi/filesubmission), which helps it go away
+  for everyone. Or skip the `.bat`: the [Mac or Linux](#on-mac-or-linux) steps work in WSL on Windows too.
 - **"Mario 64 MR needs the game"**: the game isn't on the headset, or it's in the wrong place. Run the tool with
   `--push` again, and restart the app.
 - **START does nothing**: the full game didn't start. That usually means something is missing; see above.
