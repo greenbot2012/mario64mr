@@ -36,6 +36,7 @@ The tool in this repository makes the game from your ROM on your own computer, a
 | | What it is |
 | --- | --- |
 | [Releases](../../releases) › `Mario64MR.apk` | The app |
+| `install_mario64mr.bat` | On Windows: double-click it, and it does everything below for you |
 | `install_mario64mr.py` | Makes the game from your ROM and pushes it to the headset |
 | `native/` | Mario 64 MR's changes to the game's sources, applied by the tool |
 
@@ -73,11 +74,12 @@ The tool in this repository makes the game from your ROM on your own computer, a
    - The first time, it sets up its own build tools (MSYS2, the Android NDK and adb) in
      `%LOCALAPPDATA%\Mario64MR`: no admin rights, nothing installed for the rest of Windows. Delete that folder to
      remove them.
-   - Then it makes the game from your ROM. The first run takes a while (TIME_FIRST); later runs are quicker.
+   - Then it makes the game from your ROM. The first run takes 10 to 30 minutes, depending on your PC and internet;
+     a second run takes a couple of minutes.
    - At the end it asks you to connect the headset with USB (developer mode on, allow USB debugging when it asks),
      then installs the app and sends the game to it.
 
-3. Open Mario 64 MR on the headset (step 5 below).
+3. Open Mario 64 MR on the headset: see step 5 under [On Mac or Linux](#on-mac-or-linux).
 
 ### On Mac or Linux
 
