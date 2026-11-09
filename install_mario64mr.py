@@ -356,6 +356,22 @@ def download_ndk(work):
     return target
 
 
+def make_compilers(ndk, work):
+    """The compilers as make takes them: single words (sm64ex's Makefile passes them on unquoted). On Windows, small
+    wrappers round clang.exe and its --target, as the NDK's own are elsewhere (its .cmd ones don't run from make)."""
+    if not MSYS:
+        return " ".join(compiler(ndk)), " ".join(compiler(ndk, cxx=True))
+    wrappers = work / "ndk-bin"
+    wrappers.mkdir(exist_ok=True)
+    names = []
+    for name, cxx in ((ANDROID_TARGET + "-clang", False), (ANDROID_TARGET + "-clang++", True)):
+        command = compiler(ndk, cxx)
+        (wrappers / name).write_text(f'#!/bin/sh\nexec "{command[0]}" {" ".join(command[1:])} "$@"\n')
+        (wrappers / name).chmod(0o755)
+        names.append(str(wrappers / name))
+    return tuple(names)
+
+
 def build_game(work, rom, ndk, out):
     """libsm64game.so: sm64ex with the PC port's 60 fps interpolation, the Unity bridge and Mario 64 MR's changes,
     its data left out (it reads base.zip at runtime)."""
@@ -364,7 +380,7 @@ def build_game(work, rom, ndk, out):
     # demo timer is off)
     for demo in (work / "assets/demos").glob("*.bin"):
         demo.write_bytes(bytes(4))
-    cc, cxx = " ".join(compiler(ndk)), " ".join(compiler(ndk, cxx=True))
+    cc, cxx = make_compilers(ndk, work)
     flags = "-Wno-error=implicit-function-declaration -Wno-error=int-conversion -Wno-error=incompatible-pointer-types"
     run(["make", "-j" + str(os.cpu_count() or 4), "HOST_OS=Linux", "OSX_BUILD=0", "BUILD_DIR=" + GAME_BUILD,
          "CC=" + cc, "CXX=" + cxx, "LD=" + cc, "CPP=" + cc + " -E -P -x c",
