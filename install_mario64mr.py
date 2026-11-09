@@ -439,7 +439,7 @@ def add_label(picture, out):
     shutil.copy2(picture, out / ("label" + (".png" if ext == ".png" else ".jpg")))
 
 
-def push(out, wait=False):
+def push(out, wait=False, apk=None):
     if MSYS:
         # adb is a Windows program: MSYS2 would turn its headset paths (/sdcard/...) into Windows ones
         os.environ["MSYS2_ARG_CONV_EXCL"] = "*"
@@ -451,10 +451,14 @@ def push(out, wait=False):
             sys.exit("No headset on adb: connect it (developer mode, USB debugging) and run again with --push")
         input("\nNo headset found. Connect it with USB (developer mode on), put it on and allow USB debugging,\n"
               "then press Enter here to send the game to it... ")
+    if apk:
+        print(f"Installing {apk.name} on the headset...", flush=True)
+        run(["adb", "install", "-r", "-g", native(apk)])
     # The app's own folder, made by the app (one made by adb may not be the app's): open it once if needed
     if subprocess.run(["adb", "shell", "ls", DEVICE_FOLDER], capture_output=True).returncode != 0:
         if PACKAGE not in subprocess.run(["adb", "shell", "pm", "list", "packages", PACKAGE], capture_output=True, text=True).stdout:
-            sys.exit("Mario 64 MR is not installed: adb install -r -g Mario64MR.apk first")
+            sys.exit("Mario 64 MR is not installed: adb install -r -g Mario64MR.apk first (or run again with "
+                     "--apk Mario64MR.apk)")
         print("Opening Mario 64 MR once, so it makes its data folder...")
         run(["adb", "shell", "monkey", "-p", PACKAGE, "-c", "android.intent.category.LAUNCHER", "1"])
         for _ in range(30):
@@ -487,6 +491,7 @@ def main():
     parser.add_argument("--label", type=Path, help="your own cartridge label: a square PNG or JPEG (see the README)")
     parser.add_argument("--check", action="store_true", help="only check the ROM, and stop")
     parser.add_argument("--wait", action="store_true", help="with --push: if no headset is connected, wait for it")
+    parser.add_argument("--apk", type=Path, help="with --push: also install the app (Mario64MR.apk) on the headset")
     args = parser.parse_args()
     # The ROM first: the most likely thing to be wrong, and nothing should be fetched, built or pushed until it's right
     try:
@@ -527,7 +532,7 @@ def main():
         print(f"{out / 'native' / name}: {(out / 'native' / name).stat().st_size / 1e6:.1f} MB")
 
     if args.push:
-        push(out, args.wait)
+        push(out, args.wait, args.apk)
     else:
         print(f"Done: {out}. To the headset: python3 {Path(sys.argv[0]).name} <rom> --push  (or the README's adb push)")
 

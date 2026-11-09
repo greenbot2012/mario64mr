@@ -137,16 +137,25 @@ if (-not $NoPush) {
     }
 }
 
+# The app, to install with the game: Mario64MR.apk here (next to the README) or in Downloads, the newest
+$apk = $null
+if (-not $NoPush) {
+    $folders = @($Repo, (Join-Path $env:USERPROFILE "Downloads"))
+    $apk = Get-ChildItem -LiteralPath $folders -Filter "Mario64MR*.apk" -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($apk) { Write-Host "The app: $($apk.FullName) (installed on the headset with the game)" }
+    else { Write-Host "No Mario64MR.apk here or in Downloads: if the app isn't on the headset yet, download it from the Releases page first." -ForegroundColor Yellow }
+}
+
 # 4. Make the game, and send it to the headset
 $env:M64_REPO = $Repo
+$env:M64_APK = if ($apk) { $apk.FullName } else { "" }
 $env:M64_ROM = $Rom
 $env:M64_WORK = Join-Path $Root "work"
 $env:M64_ADB = if ($adbDir) { $adbDir } else { "" }
-$options = if ($NoPush) { "" } else { "--push --wait" }
-$command = 'cd "$(cygpath -u "$M64_REPO")" && ' +
-           'if [ -n "$M64_ADB" ]; then export PATH="$PATH:$(cygpath -u "$M64_ADB")"; fi && ' +
-           'python3 install_mario64mr.py "$(cygpath -u "$M64_ROM")" --work "$(cygpath -u "$M64_WORK")" ' + $options
-& $Bash -lc $command
+$env:M64_PUSH = if ($NoPush) { "" } else { "1" }
+# (a script, the paths in the environment: Windows PowerShell drops quotes inside the arguments it passes)
+& $Bash -l (Join-Path $PSScriptRoot "make_game.sh").Replace('\', '/')
 if ($LASTEXITCODE -ne 0) { Fail "Making the game failed (see above). Running install_mario64mr.bat again picks up where it stopped." }
 Write-Host ""
 Write-Host "Done." -ForegroundColor Green

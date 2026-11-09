@@ -47,16 +47,39 @@ The tool in this repository makes the game from your ROM on your own computer, a
 - Your room set up (Settings › Physical space › Space setup), so the cartridge lands on your table and Mario can run
   on it. The app asks for permission to use it the first time.
 - Your own **Super Mario 64 (USA)** ROM: `.z64`, `.v64` or `.n64`, SHA-1 `9bef1128717f958171a4afac3ed78ee2bb4e86ce`
-- A Mac or Linux computer (on Windows, use WSL) with `python3`, `git`, `make`, `patch` and a C compiler, and about
-  3 GB of free space.
-  - Mac: `xcode-select --install`
-  - Ubuntu / WSL: `sudo apt install build-essential git python3`
-  - On Windows, put this repository in your WSL home (`cd ~`, then `git clone` it there) rather than on a Windows
-    drive (`/mnt/c/...`): building there is much slower, and long paths can go past Windows' limit.
+- A computer with about 4 GB of free space:
+  - **Windows 10 or 11**: nothing else. `install_mario64mr.bat` sets up everything it needs (see
+    [On Windows](#on-windows)).
+  - **Mac or Linux**: `python3`, `git`, `make`, `patch` and a C compiler.
+    - Mac: `xcode-select --install`
+    - Ubuntu: `sudo apt install build-essential git python3`
+  - (WSL on Windows works too, like Linux. Put this repository in your WSL home (`cd ~`, then `git clone` it there)
+    rather than on a Windows drive (`/mnt/c/...`): building there is much slower, and long paths can go past
+    Windows' limit.)
 - The Android NDK. The tool finds one installed by Android Studio, Homebrew (`brew install --cask android-ndk`) or
   Unity. Otherwise it downloads r27c from Google the first time (about 700 MB, 2 GB unpacked).
 
 ## Install
+
+### On Windows
+
+1. Download `Mario64MR.apk` from [Releases](../../releases), and this repository (Code › Download ZIP). Unzip
+   it, and leave the APK in your Downloads (or put it in the unzipped folder).
+
+2. Double-click **`install_mario64mr.bat`**, and choose your ROM when it asks. If Windows says it protected your PC,
+   click More info › Run anyway.
+
+   - It checks your ROM first: with a wrong one, it says what's wrong and stops before downloading anything.
+   - The first time, it sets up its own build tools (MSYS2, the Android NDK and adb) in
+     `%LOCALAPPDATA%\Mario64MR`: no admin rights, nothing installed for the rest of Windows. Delete that folder to
+     remove them.
+   - Then it makes the game from your ROM. The first run takes a while (TIME_FIRST); later runs are quicker.
+   - At the end it asks you to connect the headset with USB (developer mode on, allow USB debugging when it asks),
+     then installs the app and sends the game to it.
+
+3. Open Mario 64 MR on the headset (step 5 below).
+
+### On Mac or Linux
 
 1. Download `Mario64MR.apk` from [Releases](../../releases), and this repository (Code › Download ZIP, or
    `git clone`).
