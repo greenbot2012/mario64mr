@@ -60,6 +60,16 @@ DEVICE_FOLDER = f"/sdcard/Android/data/{PACKAGE}/files"
 PACK_BUILD = "build/pack"
 GAME_BUILD = "build/us_android_60_ext"
 LIBRARIES = ("libsm64game.so", "libgoddard.so", "libsm64.so")
+ANDROID_TARGET = "aarch64-linux-android29"
+# Windows: run under MSYS2 (install_mario64mr.bat sets it up), where the NDK's compiler and adb are Windows programs
+MSYS = platform.system().startswith(("MSYS", "MINGW", "CYGWIN"))
+
+
+def native(path):
+    """A path as the Windows programs (the NDK's compiler, adb) take it under MSYS2 (C:/...); as it is elsewhere."""
+    if not MSYS:
+        return str(path)
+    return subprocess.check_output(["cygpath", "-m", str(path)], text=True).strip()
 
 
 def run(cmd, cwd=None, env=None):
@@ -199,11 +209,23 @@ def host_tag():
         return "darwin-x86_64"  # (universal: Apple silicon too)
     if system == "Linux":
         return "linux-x86_64"
-    sys.exit(f"{system} isn't supported: on Windows, run this in WSL")
+    if MSYS:
+        return "windows-x86_64"
+    sys.exit(f"{system} isn't supported: on Windows, double-click install_mario64mr.bat (or run this in WSL)")
 
 
 def ndk_compiler(ndk):
-    return Path(ndk) / "toolchains/llvm/prebuilt" / host_tag() / "bin/aarch64-linux-android29-clang"
+    """The NDK's C compiler for the headset (on Windows clang.exe itself: its .cmd wrappers don't run from make)."""
+    bin_dir = Path(ndk) / "toolchains/llvm/prebuilt" / host_tag() / "bin"
+    return bin_dir / "clang.exe" if MSYS else bin_dir / f"{ANDROID_TARGET}-clang"
+
+
+def compiler(ndk, cxx=False):
+    """The command that compiles for the headset, as a list."""
+    path = ndk_compiler(ndk)
+    if MSYS:
+        return [native(path.with_name("clang++.exe" if cxx else "clang.exe")), "--target=" + ANDROID_TARGET]
+    return [str(path) + ("++" if cxx else "")]
 
 
 def find_ndk(work, given):
@@ -297,7 +319,7 @@ def extract_ndk_zip(archive, unpacked):
 
 def download_ndk(work):
     system = platform.system()
-    name = f"android-ndk-{NDK_VERSION}-" + ("darwin.dmg" if system == "Darwin" else "linux.zip")
+    name = f"android-ndk-{NDK_VERSION}-" + ("darwin.dmg" if system == "Darwin" else "windows.zip" if MSYS else "linux.zip")
     url = "https://dl.google.com/android/repository/" + name
     home = ndk_home(work)
     home.mkdir(parents=True, exist_ok=True)
@@ -334,6 +356,22 @@ def download_ndk(work):
     return target
 
 
+def make_compilers(ndk, work):
+    """The compilers as make takes them: single words (sm64ex's Makefile passes them on unquoted). On Windows, small
+    wrappers round clang.exe and its --target, as the NDK's own are elsewhere (its .cmd ones don't run from make)."""
+    if not MSYS:
+        return " ".join(compiler(ndk)), " ".join(compiler(ndk, cxx=True))
+    wrappers = work / "ndk-bin"
+    wrappers.mkdir(exist_ok=True)
+    names = []
+    for name, cxx in ((ANDROID_TARGET + "-clang", False), (ANDROID_TARGET + "-clang++", True)):
+        command = compiler(ndk, cxx)
+        (wrappers / name).write_text(f'#!/bin/sh\nexec "{command[0]}" {" ".join(command[1:])} "$@"\n')
+        (wrappers / name).chmod(0o755)
+        names.append(str(wrappers / name))
+    return tuple(names)
+
+
 def build_game(work, rom, ndk, out):
     """libsm64game.so: sm64ex with the PC port's 60 fps interpolation, the Unity bridge and Mario 64 MR's changes,
     its data left out (it reads base.zip at runtime)."""
@@ -342,10 +380,10 @@ def build_game(work, rom, ndk, out):
     # demo timer is off)
     for demo in (work / "assets/demos").glob("*.bin"):
         demo.write_bytes(bytes(4))
-    cc = str(ndk_compiler(ndk))
+    cc, cxx = make_compilers(ndk, work)
     flags = "-Wno-error=implicit-function-declaration -Wno-error=int-conversion -Wno-error=incompatible-pointer-types"
     run(["make", "-j" + str(os.cpu_count() or 4), "HOST_OS=Linux", "OSX_BUILD=0", "BUILD_DIR=" + GAME_BUILD,
-         "CC=" + cc, "CXX=" + cc + "++", "LD=" + cc, "CPP=" + cc + " -E -P -x c",
+         "CC=" + cc, "CXX=" + cxx, "LD=" + cc, "CPP=" + cc + " -E -P -x c",
          "RENDER_API=UNITY", "WINDOW_API=UNITY", "AUDIO_API=UNITY", "CONTROLLER_API=UNITY", "NOEXTRACT=1",
          "EXTERNAL_DATA=1", "EXT_OPTIONS_MENU=1", "TEXTURE_FIX=0", "BETTERCAMERA=0", "NODRAWINGDISTANCE=0",
          "LDFLAGS=-shared -Wl,--no-undefined -Wl,-soname,libsm64game.so -Wl,-z,max-page-size=16384 -lm",
@@ -380,11 +418,11 @@ def build_goddard(decomp, extracted, ndk, work, out):
     sources += [kit / "shim/n64_stubs.c", kit / "shim/gd_api.c"]
     defines = ["-DVERSION_US=1", "-DF3D_OLD=1", "-DNON_MATCHING=1", "-DAVOID_UB=1", "-D_LANGUAGE_C",
                "-DNO_SEGMENTED_MEMORY", "-DGBI_FLOATS"]
-    includes = [f"-I{gen}", f"-I{src}", f"-I{decomp}/include", f"-I{decomp}/src", f"-I{decomp}", f"-I{kit}/shim"]
-    run([ndk_compiler(ndk), "-std=gnu99", "-O2", "-fPIC", "-fno-strict-aliasing", "-fsigned-char", "-fvisibility=hidden",
+    includes = ["-I" + native(p) for p in (gen, src, decomp / "include", decomp / "src", decomp, kit / "shim")]
+    run(compiler(ndk) + ["-std=gnu99", "-O2", "-fPIC", "-fno-strict-aliasing", "-fsigned-char", "-fvisibility=hidden",
          "-w", "-U_FORTIFY_SOURCE", "-D_FORTIFY_SOURCE=0"] + defines + includes +
-        ["-shared", "-Wl,-soname,libgoddard.so", "-Wl,-z,max-page-size=16384", "-o", out / "libgoddard.so"]
-        + sources + ["-lm"])
+        ["-shared", "-Wl,-soname,libgoddard.so", "-Wl,-z,max-page-size=16384", "-o", native(out / "libgoddard.so")]
+        + [native(p) for p in sources] + ["-lm"])
 
 
 def build_libsm64(libsm64, ndk, out):
@@ -395,9 +433,9 @@ def build_libsm64(libsm64, ndk, out):
     dirs = ["src", "src/decomp", "src/decomp/engine", "src/decomp/include/PR", "src/decomp/game", "src/decomp/pc",
             "src/decomp/pc/audio", "src/decomp/mario", "src/decomp/tools", "src/decomp/audio"]
     sources = sorted(str(p.relative_to(libsm64)) for d in dirs for p in (libsm64 / d).glob("*.c"))
-    run([ndk_compiler(ndk), "-O2", "-fno-strict-aliasing", "-Wno-everything", "-fPIC", "-fvisibility=hidden",
+    run(compiler(ndk) + ["-O2", "-fno-strict-aliasing", "-Wno-everything", "-fPIC", "-fvisibility=hidden",
          "-DSM64_LIB_EXPORT", "-DGBI_FLOATS", "-DVERSION_US", "-DNO_SEGMENTED_MEMORY", "-I", "src/decomp/include",
-         "-shared", "-Wl,-soname,libsm64.so", "-Wl,-z,max-page-size=16384", "-o", out / "libsm64.so"]
+         "-shared", "-Wl,-soname,libsm64.so", "-Wl,-z,max-page-size=16384", "-o", native(out / "libsm64.so")]
         + sources + ["-lm"], cwd=libsm64)
 
 
@@ -417,14 +455,26 @@ def add_label(picture, out):
     shutil.copy2(picture, out / ("label" + (".png" if ext == ".png" else ".jpg")))
 
 
-def push(out):
-    devices = subprocess.run(["adb", "devices"], capture_output=True, text=True, check=True).stdout
-    if "\tdevice" not in devices:
-        sys.exit("No headset on adb: connect it (developer mode, USB debugging) and run again with --push")
+def push(out, wait=False, apk=None):
+    if MSYS:
+        # adb is a Windows program: MSYS2 would turn its headset paths (/sdcard/...) into Windows ones
+        os.environ["MSYS2_ARG_CONV_EXCL"] = "*"
+    while True:
+        devices = subprocess.run(["adb", "devices"], capture_output=True, text=True, check=True).stdout
+        if "\tdevice" in devices:
+            break
+        if not wait:
+            sys.exit("No headset on adb: connect it (developer mode, USB debugging) and run again with --push")
+        input("\nNo headset found. Connect it with USB (developer mode on), put it on and allow USB debugging,\n"
+              "then press Enter here to send the game to it... ")
+    if apk:
+        print(f"Installing {apk.name} on the headset...", flush=True)
+        run(["adb", "install", "-r", "-g", native(apk)])
     # The app's own folder, made by the app (one made by adb may not be the app's): open it once if needed
     if subprocess.run(["adb", "shell", "ls", DEVICE_FOLDER], capture_output=True).returncode != 0:
         if PACKAGE not in subprocess.run(["adb", "shell", "pm", "list", "packages", PACKAGE], capture_output=True, text=True).stdout:
-            sys.exit("Mario 64 MR is not installed: adb install -r -g Mario64MR.apk first")
+            sys.exit("Mario 64 MR is not installed: adb install -r -g Mario64MR.apk first (or run again with "
+                     "--apk Mario64MR.apk)")
         print("Opening Mario 64 MR once, so it makes its data folder...")
         run(["adb", "shell", "monkey", "-p", PACKAGE, "-c", "android.intent.category.LAUNCHER", "1"])
         for _ in range(30):
@@ -435,15 +485,15 @@ def push(out):
             sys.exit("Mario 64 MR did not start: put the headset on (it must be awake), open it once, and run again")
         run(["adb", "shell", "am", "force-stop", PACKAGE])
     run(["adb", "shell", "mkdir", "-p", DEVICE_FOLDER + "/sm64/res", DEVICE_FOLDER + "/native"])
-    run(["adb", "push", out / "baserom.us.z64", DEVICE_FOLDER + "/"])
-    run(["adb", "push", out / "sm64/res/base.zip", DEVICE_FOLDER + "/sm64/res/"])
-    run(["adb", "push"] + [out / "native" / n for n in LIBRARIES] + [DEVICE_FOLDER + "/native/"])
+    run(["adb", "push", native(out / "baserom.us.z64"), DEVICE_FOLDER + "/"])
+    run(["adb", "push", native(out / "sm64/res/base.zip"), DEVICE_FOLDER + "/sm64/res/"])
+    run(["adb", "push"] + [native(out / "native" / n) for n in LIBRARIES] + [DEVICE_FOLDER + "/native/"])
     labels = sorted(out.glob("label.*"))
     if labels:
         run(["adb", "shell", "rm", "-f", DEVICE_FOLDER + "/label.png", DEVICE_FOLDER + "/label.jpg"])
-        run(["adb", "push", labels[0], DEVICE_FOLDER + "/"])
+        run(["adb", "push", native(labels[0]), DEVICE_FOLDER + "/"])
     run(["adb", "shell", "am", "force-stop", PACKAGE])
-    print("On the headset. Start Mario 64 MR from the library (Unknown sources).")
+    print("On the headset. Start Mario 64 MR from your Library (Unknown Sources, or search for \"Mario\").")
 
 
 def main():
@@ -456,6 +506,8 @@ def main():
     parser.add_argument("--push", action="store_true", help="also adb push it to the headset")
     parser.add_argument("--label", type=Path, help="your own cartridge label: a square PNG or JPEG (see the README)")
     parser.add_argument("--check", action="store_true", help="only check the ROM, and stop")
+    parser.add_argument("--wait", action="store_true", help="with --push: if no headset is connected, wait for it")
+    parser.add_argument("--apk", type=Path, help="with --push: also install the app (Mario64MR.apk) on the headset")
     args = parser.parse_args()
     # The ROM first: the most likely thing to be wrong, and nothing should be fetched, built or pushed until it's right
     try:
@@ -496,7 +548,7 @@ def main():
         print(f"{out / 'native' / name}: {(out / 'native' / name).stat().st_size / 1e6:.1f} MB")
 
     if args.push:
-        push(out)
+        push(out, args.wait, args.apk)
     else:
         print(f"Done: {out}. To the headset: python3 {Path(sys.argv[0]).name} <rom> --push  (or the README's adb push)")
 
