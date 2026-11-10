@@ -276,9 +276,10 @@ white, so your room is grey around the window. If it stutters, lower the resolut
 Valve's Steam Frame has its own app: **`Mario64MR-SteamFrame.apk`** in [Releases](../../releases). The game you
 make from your ROM is the same for both headsets; only the app is different.
 
-> **Not tested on a Steam Frame yet.** I don't have one: the app is built from Valve's documentation for its
-> Android support (Lepton) and OpenXR. If you try it, please [open an issue](../../issues) saying how it went, with
-> the `[Mario64MR]` lines from `adb logcat -s Unity` if something's wrong.
+> **Tested on a Steam Frame 2026-11-10** with Lepton v3.0.5 (rootfs v3.0.3): installs with
+> `lepton install_app`, OpenXR starts, the game reaches the file select, and `[Mario64MR]` logs are clean. Not yet
+> verified by playing with the headset on. If you play it, please [open an issue](../../issues) saying how it went,
+> with the `[Mario64MR]` lines from `adb logcat -s Unity` if something's wrong.
 
 What's different from the Quest:
 
@@ -308,7 +309,21 @@ To install it:
      python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push --frame --apk Mario64MR-SteamFrame.apk
      ```
 
-     Or `--frame 192.168.1.23` with the Frame's IP address.
+     Or `--frame 192.168.1.23` with the Frame's IP address. On systems where `frame` alone doesn't resolve
+     (NixOS was observed without mDNS by default), the installer also tries `frame.lan` before giving up.
+
+   > **If the app shows nothing when you open it on the Frame and `adb logcat -s Unity` has
+   > `xrCreateInstance: XR_ERROR_FILE_ACCESS_ERROR`**, Lepton's OpenXR/Vulkan API layer libraries
+   > (`libVkLayer_VALVE_fdm_injection.so`, `libVkLayer_fossilize.so`) are sitting in the app's lib directory as
+   > zero-byte stubs. Plain `adb install` leaves them that way; Lepton only generates the bind-mount config that
+   > fills them in when you install with its own `install_app` command. Two fixes:
+   >
+   > - On the Frame (over SSH):
+   >   `~/.steam/steam/steamapps/common/Lepton/lepton install_app dev /path/to/Mario64MR-SteamFrame.apk`
+   > - From your computer, if you have SSH set up to the Frame (public key in its `~/.ssh/authorized_keys`):
+   >   add `--lepton-install steamos@frame.lan` to the `install_mario64mr.py` line above. The installer will
+   >   `scp` the APK to the Frame and run `lepton install_app` for you.
+
 3. Start Mario 64 MR from Lepton Development's home screen.
 
 To push by hand instead, `adb connect frame` first, then follow [Pushing by hand](#pushing-by-hand).
