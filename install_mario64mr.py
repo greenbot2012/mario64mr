@@ -457,9 +457,25 @@ def add_label(picture, out):
     shutil.copy2(picture, out / ("label" + (".png" if ext == ".png" else ".jpg")))
 
 
+def resolve_frame_host(host):
+    """`frame` mDNS doesn't resolve on every network/OS (NixOS was observed without it); fall back to `frame.lan`,
+    which Avahi's default .local vs .lan can cover. Anything with a dot or looking like an IP is left alone."""
+    if host != "frame":
+        return host
+    import socket
+    for candidate in ("frame", "frame.lan"):
+        try:
+            socket.gethostbyname(candidate)
+            return candidate
+        except OSError:
+            continue
+    return host  # original, so the error message below says what was tried
+
+
 def connect_frame(host, wait):
     """The Steam Frame, over Wi-Fi: its Android apps run in Lepton, which adb reaches as host:5555 (the headset's
     hostname is frame unless you changed it; its IP address works too). Every adb command after goes to it."""
+    host = resolve_frame_host(host)
     serial = host if ":" in host else host + ":5555"
     os.environ["ANDROID_SERIAL"] = serial
     while True:
@@ -475,7 +491,41 @@ def connect_frame(host, wait):
               "from your Library (an Android home screen opens).\nSame Wi-Fi as this computer. Then press Enter here... ")
 
 
-def push(out, wait=False, apk=None, frame=None):
+LEPTON_PATH = "~/.steam/steam/steamapps/common/Lepton/lepton"
+
+
+def install_apk_via_lepton(apk, ssh_target, context="dev"):
+    """Install the Steam Frame APK through Lepton on the headset over SSH, instead of plain `adb install`.
+
+    Why: adb install leaves the Lepton-managed OpenXR/Vulkan API layer libraries as zero-byte stubs
+    (libVkLayer_VALVE_fdm_injection.so, libVkLayer_fossilize.so). Lepton only generates the app's
+    bind-mount config (via `lepton install_app`), which is what makes the real layers get mounted over
+    those stubs at app launch. Without it, xrCreateInstance fails with XR_ERROR_FILE_ACCESS_ERROR and
+    the app shows nothing. Seen on a Frame running Lepton v3.0.5 (rootfs v3.0.3), November 2026.
+
+    ssh_target is user@host (default "steamos@frame.lan" fits a Developer Mode Frame on the LAN)."""
+    ssh_cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+    probe = subprocess.run(ssh_cmd + [ssh_target, f"test -x {LEPTON_PATH} && echo ok"], capture_output=True, text=True)
+    if probe.returncode != 0 or probe.stdout.strip() != "ok":
+        sys.exit(f"Can't reach Lepton over SSH as {ssh_target} (make sure the Frame is awake, Developer Mode is on,\n"
+                 f"  this computer's public key is in ~/.ssh/authorized_keys on the Frame, and Lepton is installed).\n"
+                 f"  Falling back: install the APK by hand with `lepton install_app dev {apk.name}` on the Frame,\n"
+                 f"  or re-run without --lepton-install.\n  ssh said: {probe.stderr.strip() or probe.stdout.strip()}")
+    print(f"Copying {apk.name} to the Frame...", flush=True)
+    remote = f"/tmp/{apk.name}"
+    run(["scp", "-o", "BatchMode=yes", str(apk), f"{ssh_target}:{remote}"])
+    print(f"Installing with Lepton ({context} context)...", flush=True)
+    result = subprocess.run(ssh_cmd + [ssh_target, f"{LEPTON_PATH} install_app {context} {remote}"],
+                            capture_output=True, text=True)
+    sys.stdout.write(result.stdout)
+    sys.stdout.write(result.stderr)
+    if result.returncode != 0 or "Success" not in result.stdout + result.stderr:
+        sys.exit(f"Lepton install_app failed (exit {result.returncode}).")
+    # The install auto-starts the activity; the push step below will push data and force-stop once it's time.
+    subprocess.run(ssh_cmd + [ssh_target, f"rm -f {remote}"], capture_output=True)
+
+
+def push(out, wait=False, apk=None, frame=None, lepton_ssh=None):
     if MSYS:
         # adb is a Windows program: MSYS2 would turn its headset paths (/sdcard/...) into Windows ones
         os.environ["MSYS2_ARG_CONV_EXCL"] = "*"
@@ -490,8 +540,20 @@ def push(out, wait=False, apk=None, frame=None):
         input("\nNo headset found. Connect it with USB (developer mode on), put it on and allow USB debugging,\n"
               "then press Enter here to send the game to it... ")
     if apk:
-        print(f"Installing {apk.name} on the headset...", flush=True)
-        run(["adb", "install", "-r", "-g", native(apk)])
+        if frame and lepton_ssh:
+            install_apk_via_lepton(apk, lepton_ssh)
+            # Lepton auto-starts the app; stop it before pushing data so nothing is open mid-copy.
+            subprocess.run(["adb", "shell", "am", "force-stop", PACKAGE], check=False)
+        elif frame:
+            print(f"Installing {apk.name} on the Steam Frame with adb...", flush=True)
+            print("  Note: a plain `adb install` on the Frame leaves Lepton's OpenXR/Vulkan API layers as zero-byte")
+            print("  stubs and the app fails to start XR (xrCreateInstance: XR_ERROR_FILE_ACCESS_ERROR). If that")
+            print("  happens, install with Lepton instead (--lepton-install <user@host>, or on the Frame:")
+            print(f"  `~/.steam/steam/steamapps/common/Lepton/lepton install_app dev {apk.name}`).", flush=True)
+            run(["adb", "install", "-r", "-g", native(apk)])
+        else:
+            print(f"Installing {apk.name} on the headset...", flush=True)
+            run(["adb", "install", "-r", "-g", native(apk)])
     # The app's own folder, made by the app (one made by adb may not be the app's): open it once if needed
     if subprocess.run(["adb", "shell", "ls", DEVICE_FOLDER], capture_output=True).returncode != 0:
         if PACKAGE not in subprocess.run(["adb", "shell", "pm", "list", "packages", PACKAGE], capture_output=True, text=True).stdout:
@@ -536,6 +598,11 @@ def main():
     parser.add_argument("--frame", nargs="?", const="frame", metavar="HOST",
                         help="with --push: send it to a Steam Frame over Wi-Fi (its hostname, frame unless you changed "
                              "it, or its IP address), with Lepton Development running on it")
+    parser.add_argument("--lepton-install", metavar="USER@HOST", dest="lepton_ssh",
+                        help="with --push --frame --apk: install the APK through Lepton (over SSH), not plain `adb "
+                             "install`, so Lepton's OpenXR/Vulkan API layer bind mounts are set up. Pass user@host "
+                             "(e.g. steamos@frame.lan); this computer's public SSH key must be in the Frame's "
+                             "authorized_keys. Without this, adb install still runs but the first XR launch may fail.")
     args = parser.parse_args()
     # The ROM first: the most likely thing to be wrong, and nothing should be fetched, built or pushed until it's right
     try:
@@ -576,7 +643,7 @@ def main():
         print(f"{out / 'native' / name}: {(out / 'native' / name).stat().st_size / 1e6:.1f} MB")
 
     if args.push:
-        push(out, args.wait, args.apk, args.frame)
+        push(out, args.wait, args.apk, args.frame, args.lepton_ssh)
     else:
         print(f"Done: {out}. To the headset: python3 {Path(sys.argv[0]).name} <rom> --push  (or the README's adb push)")
 
