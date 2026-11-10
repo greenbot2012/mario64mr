@@ -216,8 +216,50 @@ def host_tag():
     sys.exit(f"{system} isn't supported: on Windows, double-click install_mario64mr.bat (or run this in WSL)")
 
 
+# ARM64 Linux (the Steam Frame itself): Google ships no NDK compilers for it, so the system's clang and lld compile for
+# the headset, with the NDK's Android sysroot and runtime libraries (the only parts of the NDK unpacked there)
+ARM64_LINUX = platform.system() == "Linux" and platform.machine() in ("aarch64", "arm64")
+NDK_PREBUILT = "toolchains/llvm/prebuilt/linux-x86_64"
+
+
+def ndk_runtime(ndk):
+    """The NDK's Android runtime libraries for clang (lib/clang/<version>/lib/linux), or None."""
+    found = sorted(glob.glob(str(Path(ndk) / NDK_PREBUILT / "lib/clang/*/lib/linux/libclang_rt.builtins-aarch64-android.a")))
+    return Path(found[-1]).parent if found else None
+
+
+def ndk_ready(ndk):
+    if ARM64_LINUX:
+        return (Path(ndk) / NDK_PREBUILT / "sysroot/usr/include/stdio.h").is_file() and ndk_runtime(ndk) is not None
+    return ndk_compiler(ndk).is_file()
+
+
+def host_clang(ndk):
+    """On ARM64 Linux: small wrappers round the system's clang that compile for the headset, as the NDK's own would
+    (single words, as sm64ex's Makefile takes them), written next to the NDK."""
+    wrappers = Path(ndk) / "host-clang"
+    resources = wrappers / "resources"
+    (resources / "lib").mkdir(parents=True, exist_ok=True)
+    # clang's own headers (stddef.h...) with the NDK's Android builtins and unwinder
+    system_resources = subprocess.check_output(["clang", "-print-resource-dir"], text=True).strip()
+    for link, target in ((resources / "include", Path(system_resources) / "include"),
+                         (resources / "lib/linux", ndk_runtime(ndk))):
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(target)
+    sysroot = Path(ndk).resolve() / NDK_PREBUILT / "sysroot"
+    for name, driver in ((f"{ANDROID_TARGET}-clang", "clang"), (f"{ANDROID_TARGET}-clang++", "clang++")):
+        (wrappers / name).write_text(
+            f'#!/bin/sh\nexec {driver} --target={ANDROID_TARGET} --sysroot="{sysroot}" -resource-dir="{resources}" '
+            f'-fuse-ld=lld --rtlib=compiler-rt --unwindlib=libunwind "$@"\n')
+        (wrappers / name).chmod(0o755)
+    return wrappers / f"{ANDROID_TARGET}-clang"
+
+
 def ndk_compiler(ndk):
     """The NDK's C compiler for the headset (on Windows clang.exe itself: its .cmd wrappers don't run from make)."""
+    if ARM64_LINUX:
+        return host_clang(ndk)
     bin_dir = Path(ndk) / "toolchains/llvm/prebuilt" / host_tag() / "bin"
     return bin_dir / "clang.exe" if MSYS else bin_dir / f"{ANDROID_TARGET}-clang"
 
@@ -241,9 +283,9 @@ def find_ndk(work, given):
                     work / "ndk"):
         candidates += sorted(glob.glob(str(pattern)), reverse=True)
     for c in candidates:
-        if c and ndk_compiler(c).is_file():
+        if c and ndk_ready(c):
             print(f"Android NDK: {c}")
-            return Path(c)
+            return Path(c).resolve()  # (make runs in other folders: a relative --ndk wouldn't be found from there)
     return download_ndk(work)
 
 
@@ -276,11 +318,18 @@ class Progress:
             print(f"  {self.what}: {step}%", flush=True)
 
 
+def wanted_on_arm64(name):
+    """On ARM64 Linux, only the NDK's Android sysroot and clang runtime libraries are used (see host_clang)."""
+    inside = name.split("/", 1)[1] if "/" in name else ""
+    return (inside.startswith(NDK_PREBUILT + "/sysroot/") or
+            re.match(re.escape(NDK_PREBUILT) + r"/lib/clang/[^/]+/lib/linux/", inside) is not None)
+
+
 def extract_ndk_zip(archive, unpacked):
     """Unzips the NDK with its executable bits and symlinks, showing progress, and stops with the reason (rather than
     hanging, or going on half unpacked) when a file can't be written: on a Windows drive, usually the path length."""
     with zipfile.ZipFile(archive) as z:
-        entries = z.infolist()
+        entries = [e for e in z.infolist() if not ARM64_LINUX or wanted_on_arm64(e.filename)]
         if on_windows_drive(unpacked):
             longest = max(entries, key=lambda e: len(e.filename))
             # (/mnt/c/... is C:\..., 4 characters fewer)
@@ -353,8 +402,8 @@ def download_ndk(work):
         extract_ndk_zip(archive, unpacked)
         (unpacked / f"android-ndk-{NDK_VERSION}").rename(target)
         shutil.rmtree(unpacked)
-    if not ndk_compiler(target).is_file():
-        sys.exit(f"The NDK in {target} has no {ndk_compiler(target).name}")
+    if not ndk_ready(target):
+        sys.exit(f"The NDK in {target} is incomplete")
     return target
 
 
@@ -611,7 +660,7 @@ def main():
         sys.exit(str(problem))
     if args.check:
         return
-    for tool in ("git", "make", "patch", "cc"):
+    for tool in ("git", "make", "patch", "cc") + (("clang", "ld.lld") if ARM64_LINUX else ()):
         if shutil.which(tool) is None:
             sys.exit(f"{tool} not found (see the top of this script for what is needed)")
     work, out = args.work.resolve(), args.out.resolve()

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Install Mario 64 MR
+Comment=Makes Mario 64 MR from your Super Mario 64 (USA) ROM and adds it to your Steam library
+Exec=konsole --hold -e bash -c "curl -fsSL -o /tmp/install-mario64mr.sh https://raw.githubusercontent.com/lucas-martinic/mario64mr/main/steam-frame/install.sh && bash /tmp/install-mario64mr.sh"
+Icon=system-software-install
+Terminal=false
+Type=Application
