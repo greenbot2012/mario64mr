@@ -276,10 +276,10 @@ white, so your room is grey around the window. If it stutters, lower the resolut
 Valve's Steam Frame has its own app: **`Mario64MR-SteamFrame.apk`** in [Releases](../../releases). The game you
 make from your ROM is the same for both headsets; only the app is different.
 
-> **Tested on a Steam Frame 2026-11-10** with Lepton v3.0.5 (rootfs v3.0.3): installs with
-> `lepton install_app`, OpenXR starts, the game reaches the file select, and `[Mario64MR]` logs are clean. Not yet
-> verified by playing with the headset on. If you play it, please [open an issue](../../issues) saying how it went,
-> with the `[Mario64MR]` lines from `adb logcat -s Unity` if something's wrong.
+> **Tested on a Steam Frame 2026-11-10** with Lepton v3.0.5 (rootfs v3.0.3): the cartridge, the title screen,
+> passthrough, the full game, carrying Mario in and out of the window and the diorama (on the floor) all work.
+> If something's wrong on yours, please [open an issue](../../issues) with the `[Mario64MR]` lines from
+> `adb logcat -s Unity`.
 
 What's different from the Quest:
 
