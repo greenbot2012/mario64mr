@@ -293,7 +293,21 @@ What's different from the Quest:
 - **Grey passthrough**: the Frame's cameras are black and white.
 - In the options, **refresh rate** and **sharpening** do nothing: the Frame runs at its own rate.
 
-To install it:
+### On the Frame itself (no computer needed)
+
+1. On the Frame, switch to desktop mode, and put your **Super Mario 64 (USA)** ROM in **Downloads** (a `.z64`,
+   `.v64` or `.n64`, or a `.zip` with one inside).
+2. Download [`Install-Mario64MR.desktop`](steam-frame/Install-Mario64MR.desktop) (Raw › save it) and
+   double-click it (Execute, if it asks).
+3. A terminal opens and does the rest: it makes the game from your ROM on the Frame (the first time about
+   10 minutes and a 700 MB download), installs the app, and adds **Mario 64 MR** to your Steam library. If it
+   can't find your ROM, it asks you to choose it.
+4. Return to Gaming Mode and start Mario 64 MR from your Library.
+
+Run it again to update. Everything goes in `~/.local/share/mario64mr` (delete it, and the Steam shortcut, to
+remove Mario 64 MR); the log is `~/.local/share/mario64mr/install.log`.
+
+### From a computer
 
 1. On the Frame, turn on Developer Mode, then start **Lepton Development** from your Library (an Android home
    screen opens). Keep the Frame on the same Wi-Fi as your computer.

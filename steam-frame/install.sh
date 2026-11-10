@@ -133,8 +133,9 @@ fi
 say "Making the game from your ROM (the first time about 10 minutes and a 700 MB download)"
 cd "$DIR/src"
 python3 "$TOOL" "$ROM" --out "$DIR/game" --work "$DIR/work" || fail "making the game failed (see above)"
-# The NDK download is only needed again for a new NDK version
+# The NDK download is only needed again for a new NDK version, and a ROM taken out of a zip isn't needed at all
 rm -f "$DIR/work/"android-ndk-*.zip
+rm -rf "$DIR/rom-from-zip"
 
 say "Putting the game where the app finds it"
 # Lepton gives each Steam launch its own Android storage: /sdcard is $COMPAT/external (kept across launches and app
@@ -155,6 +156,10 @@ export STEAM_COMPAT_DATA_PATH="$DIR/compat"
 export STEAM_COMPAT_INSTALL_PATH="$DIR/app"
 export STEAM_COMPAT_LIBRARY_PATHS="$DIR"
 export STEAM_COMPAT_CLIENT_INSTALL_PATH="\${STEAM_COMPAT_CLIENT_INSTALL_PATH:-\$HOME/.steam/steam}"
+# (Steam sets a Fossilize dump path for every launch; Lepton then needs the shader cache folder it sits in)
+export STEAM_COMPAT_SHADER_PATH="$DIR/shadercache"
+export STEAM_FOSSILIZE_DUMP_PATH="$DIR/shadercache/fozpipelinesv6/steamapp_pipeline_cache"
+mkdir -p "\$STEAM_FOSSILIZE_DUMP_PATH"
 exec "$LEPTON" waitforexitandrun -- "$DIR/app/Mario64MR-SteamFrame.apk"
 EOF
 chmod +x "$DIR/launch.sh"
