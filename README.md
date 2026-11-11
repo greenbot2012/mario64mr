@@ -68,7 +68,8 @@ The tool in this repository makes the game from your ROM on your own computer, a
     Windows' limit.)
 - The Android NDK. The tool finds one installed by Android Studio, Homebrew (`brew install --cask android-ndk`) or
   Unity. Otherwise it downloads r27c from Google the first time (about 700 MB, 2 GB unpacked).
-
+## Update
+Use an ADB Command or sidequest on the apk to update to a new version.
 ## Install
 
 ### On Windows
