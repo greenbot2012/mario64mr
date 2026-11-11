@@ -35,6 +35,7 @@ import hashlib
 import os
 import platform
 import re
+import shlex
 import shutil
 import stat
 import struct
@@ -216,8 +217,50 @@ def host_tag():
     sys.exit(f"{system} isn't supported: on Windows, double-click install_mario64mr.bat (or run this in WSL)")
 
 
+# ARM64 Linux (the Steam Frame itself): Google ships no NDK compilers for it, so the system's clang and lld compile for
+# the headset, with the NDK's Android sysroot and runtime libraries (the only parts of the NDK unpacked there)
+ARM64_LINUX = platform.system() == "Linux" and platform.machine() in ("aarch64", "arm64")
+NDK_PREBUILT = "toolchains/llvm/prebuilt/linux-x86_64"
+
+
+def ndk_runtime(ndk):
+    """The NDK's Android runtime libraries for clang (lib/clang/<version>/lib/linux), or None."""
+    found = sorted(glob.glob(str(Path(ndk) / NDK_PREBUILT / "lib/clang/*/lib/linux/libclang_rt.builtins-aarch64-android.a")))
+    return Path(found[-1]).parent if found else None
+
+
+def ndk_ready(ndk):
+    if ARM64_LINUX:
+        return (Path(ndk) / NDK_PREBUILT / "sysroot/usr/include/stdio.h").is_file() and ndk_runtime(ndk) is not None
+    return ndk_compiler(ndk).is_file()
+
+
+def host_clang(ndk):
+    """On ARM64 Linux: small wrappers round the system's clang that compile for the headset, as the NDK's own would
+    (single words, as sm64ex's Makefile takes them), written next to the NDK."""
+    wrappers = Path(ndk) / "host-clang"
+    resources = wrappers / "resources"
+    (resources / "lib").mkdir(parents=True, exist_ok=True)
+    # clang's own headers (stddef.h...) with the NDK's Android builtins and unwinder
+    system_resources = subprocess.check_output(["clang", "-print-resource-dir"], text=True).strip()
+    for link, target in ((resources / "include", Path(system_resources) / "include"),
+                         (resources / "lib/linux", ndk_runtime(ndk))):
+        if link.is_symlink() or link.exists():
+            link.unlink()
+        link.symlink_to(target)
+    sysroot = Path(ndk).resolve() / NDK_PREBUILT / "sysroot"
+    for name, driver in ((f"{ANDROID_TARGET}-clang", "clang"), (f"{ANDROID_TARGET}-clang++", "clang++")):
+        (wrappers / name).write_text(
+            f'#!/bin/sh\nexec {driver} --target={ANDROID_TARGET} --sysroot="{sysroot}" -resource-dir="{resources}" '
+            f'-fuse-ld=lld --rtlib=compiler-rt --unwindlib=libunwind "$@"\n')
+        (wrappers / name).chmod(0o755)
+    return wrappers / f"{ANDROID_TARGET}-clang"
+
+
 def ndk_compiler(ndk):
     """The NDK's C compiler for the headset (on Windows clang.exe itself: its .cmd wrappers don't run from make)."""
+    if ARM64_LINUX:
+        return host_clang(ndk)
     bin_dir = Path(ndk) / "toolchains/llvm/prebuilt" / host_tag() / "bin"
     return bin_dir / "clang.exe" if MSYS else bin_dir / f"{ANDROID_TARGET}-clang"
 
@@ -241,9 +284,9 @@ def find_ndk(work, given):
                     work / "ndk"):
         candidates += sorted(glob.glob(str(pattern)), reverse=True)
     for c in candidates:
-        if c and ndk_compiler(c).is_file():
+        if c and ndk_ready(c):
             print(f"Android NDK: {c}")
-            return Path(c)
+            return Path(c).resolve()  # (make runs in other folders: a relative --ndk wouldn't be found from there)
     return download_ndk(work)
 
 
@@ -276,11 +319,18 @@ class Progress:
             print(f"  {self.what}: {step}%", flush=True)
 
 
+def wanted_on_arm64(name):
+    """On ARM64 Linux, only the NDK's Android sysroot and clang runtime libraries are used (see host_clang)."""
+    inside = name.split("/", 1)[1] if "/" in name else ""
+    return (inside.startswith(NDK_PREBUILT + "/sysroot/") or
+            re.match(re.escape(NDK_PREBUILT) + r"/lib/clang/[^/]+/lib/linux/", inside) is not None)
+
+
 def extract_ndk_zip(archive, unpacked):
     """Unzips the NDK with its executable bits and symlinks, showing progress, and stops with the reason (rather than
     hanging, or going on half unpacked) when a file can't be written: on a Windows drive, usually the path length."""
     with zipfile.ZipFile(archive) as z:
-        entries = z.infolist()
+        entries = [e for e in z.infolist() if not ARM64_LINUX or wanted_on_arm64(e.filename)]
         if on_windows_drive(unpacked):
             longest = max(entries, key=lambda e: len(e.filename))
             # (/mnt/c/... is C:\..., 4 characters fewer)
@@ -353,8 +403,8 @@ def download_ndk(work):
         extract_ndk_zip(archive, unpacked)
         (unpacked / f"android-ndk-{NDK_VERSION}").rename(target)
         shutil.rmtree(unpacked)
-    if not ndk_compiler(target).is_file():
-        sys.exit(f"The NDK in {target} has no {ndk_compiler(target).name}")
+    if not ndk_ready(target):
+        sys.exit(f"The NDK in {target} is incomplete")
     return target
 
 
@@ -457,9 +507,25 @@ def add_label(picture, out):
     shutil.copy2(picture, out / ("label" + (".png" if ext == ".png" else ".jpg")))
 
 
+def resolve_frame_host(host):
+    """The bare `frame` hostname doesn't resolve on every computer; fall back to `frame.lan`, which many routers'
+    DNS provides for devices on the network. A host given explicitly (a name or an IP address) is left alone."""
+    if host != "frame":
+        return host
+    import socket
+    for candidate in ("frame", "frame.lan"):
+        try:
+            socket.gethostbyname(candidate)
+            return candidate
+        except OSError:
+            continue
+    return host  # original, so the error message below says what was tried
+
+
 def connect_frame(host, wait):
     """The Steam Frame, over Wi-Fi: its Android apps run in Lepton, which adb reaches as host:5555 (the headset's
     hostname is frame unless you changed it; its IP address works too). Every adb command after goes to it."""
+    host = resolve_frame_host(host)
     serial = host if ":" in host else host + ":5555"
     os.environ["ANDROID_SERIAL"] = serial
     while True:
@@ -475,7 +541,43 @@ def connect_frame(host, wait):
               "from your Library (an Android home screen opens).\nSame Wi-Fi as this computer. Then press Enter here... ")
 
 
-def push(out, wait=False, apk=None, frame=None):
+LEPTON_PATH = "~/.steam/steam/steamapps/common/Lepton/lepton"
+
+
+def install_apk_via_lepton(apk, ssh_target, context="dev"):
+    """Install the Steam Frame APK through Lepton on the headset over SSH, instead of plain `adb install`.
+
+    Why: adb install leaves the Lepton-managed OpenXR/Vulkan API layer libraries as zero-byte stubs
+    (libVkLayer_VALVE_fdm_injection.so, libVkLayer_fossilize.so). Lepton only generates the app's
+    bind-mount config (via `lepton install_app`), which is what makes the real layers get mounted over
+    those stubs at app launch. Without it, xrCreateInstance fails with XR_ERROR_FILE_ACCESS_ERROR and
+    the app shows nothing. Seen on a Frame running Lepton v3.0.5 (rootfs v3.0.3), November 2026.
+
+    ssh_target is user@host (default "steamos@frame.lan" fits a Developer Mode Frame on the LAN)."""
+    ssh_cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+    probe = subprocess.run(ssh_cmd + [ssh_target, f"test -x {LEPTON_PATH} && echo ok"], capture_output=True, text=True)
+    if probe.returncode != 0 or probe.stdout.strip() != "ok":
+        sys.exit(f"Can't reach Lepton over SSH as {ssh_target} (make sure the Frame is awake, Developer Mode is on,\n"
+                 f"  this computer's public key is in ~/.ssh/authorized_keys on the Frame, and Lepton is installed).\n"
+                 f"  Falling back: install the APK by hand with `lepton install_app dev {apk.name}` on the Frame,\n"
+                 f"  or re-run without --lepton-install.\n  ssh said: {probe.stderr.strip() or probe.stdout.strip()}")
+    print(f"Copying {apk.name} to the Frame...", flush=True)
+    # A fixed name without spaces: scp's SFTP mode (OpenSSH 9+) takes remote paths literally while older scp
+    # passes them through the remote shell, so a name like "Mario64MR-SteamFrame (1).apk" can't be quoted for both
+    remote = "/tmp/mario64mr-install.apk"
+    run(["scp", "-o", "BatchMode=yes", str(apk), f"{ssh_target}:{remote}"])
+    print(f"Installing with Lepton ({context} context)...", flush=True)
+    result = subprocess.run(ssh_cmd + [ssh_target, f"{LEPTON_PATH} install_app {shlex.quote(context)} {shlex.quote(remote)}"],
+                            capture_output=True, text=True)
+    sys.stdout.write(result.stdout)
+    sys.stdout.write(result.stderr)
+    if result.returncode != 0 or "Success" not in result.stdout + result.stderr:
+        sys.exit(f"Lepton install_app failed (exit {result.returncode}).")
+    # The install auto-starts the activity; the push step below will push data and force-stop once it's time.
+    subprocess.run(ssh_cmd + [ssh_target, f"rm -f {shlex.quote(remote)}"], capture_output=True)
+
+
+def push(out, wait=False, apk=None, frame=None, lepton_ssh=None):
     if MSYS:
         # adb is a Windows program: MSYS2 would turn its headset paths (/sdcard/...) into Windows ones
         os.environ["MSYS2_ARG_CONV_EXCL"] = "*"
@@ -490,8 +592,20 @@ def push(out, wait=False, apk=None, frame=None):
         input("\nNo headset found. Connect it with USB (developer mode on), put it on and allow USB debugging,\n"
               "then press Enter here to send the game to it... ")
     if apk:
-        print(f"Installing {apk.name} on the headset...", flush=True)
-        run(["adb", "install", "-r", "-g", native(apk)])
+        if frame and lepton_ssh:
+            install_apk_via_lepton(apk, lepton_ssh)
+            # Lepton auto-starts the app; stop it before pushing data so nothing is open mid-copy.
+            subprocess.run(["adb", "shell", "am", "force-stop", PACKAGE], check=False)
+        elif frame:
+            print(f"Installing {apk.name} on the Steam Frame with adb...", flush=True)
+            print("  Note: a plain `adb install` on the Frame leaves Lepton's OpenXR/Vulkan API layers as zero-byte")
+            print("  stubs and the app fails to start XR (xrCreateInstance: XR_ERROR_FILE_ACCESS_ERROR). If that")
+            print("  happens, install with Lepton instead (--lepton-install <user@host>, or on the Frame:")
+            print(f"  `~/.steam/steam/steamapps/common/Lepton/lepton install_app dev {apk.name}`).", flush=True)
+            run(["adb", "install", "-r", "-g", native(apk)])
+        else:
+            print(f"Installing {apk.name} on the headset...", flush=True)
+            run(["adb", "install", "-r", "-g", native(apk)])
     # The app's own folder, made by the app (one made by adb may not be the app's): open it once if needed
     if subprocess.run(["adb", "shell", "ls", DEVICE_FOLDER], capture_output=True).returncode != 0:
         if PACKAGE not in subprocess.run(["adb", "shell", "pm", "list", "packages", PACKAGE], capture_output=True, text=True).stdout:
@@ -536,6 +650,11 @@ def main():
     parser.add_argument("--frame", nargs="?", const="frame", metavar="HOST",
                         help="with --push: send it to a Steam Frame over Wi-Fi (its hostname, frame unless you changed "
                              "it, or its IP address), with Lepton Development running on it")
+    parser.add_argument("--lepton-install", metavar="USER@HOST", dest="lepton_ssh",
+                        help="with --push --frame --apk: install the APK through Lepton (over SSH), not plain `adb "
+                             "install`, so Lepton's OpenXR/Vulkan API layer bind mounts are set up. Pass user@host "
+                             "(e.g. steamos@frame.lan); this computer's public SSH key must be in the Frame's "
+                             "authorized_keys. Without this, adb install still runs but the first XR launch may fail.")
     args = parser.parse_args()
     # The ROM first: the most likely thing to be wrong, and nothing should be fetched, built or pushed until it's right
     try:
@@ -544,7 +663,7 @@ def main():
         sys.exit(str(problem))
     if args.check:
         return
-    for tool in ("git", "make", "patch", "cc"):
+    for tool in ("git", "make", "patch", "cc") + (("clang", "ld.lld") if ARM64_LINUX else ()):
         if shutil.which(tool) is None:
             sys.exit(f"{tool} not found (see the top of this script for what is needed)")
     work, out = args.work.resolve(), args.out.resolve()
@@ -576,7 +695,7 @@ def main():
         print(f"{out / 'native' / name}: {(out / 'native' / name).stat().st_size / 1e6:.1f} MB")
 
     if args.push:
-        push(out, args.wait, args.apk, args.frame)
+        push(out, args.wait, args.apk, args.frame, args.lepton_ssh)
     else:
         print(f"Done: {out}. To the headset: python3 {Path(sys.argv[0]).name} <rom> --push  (or the README's adb push)")
 

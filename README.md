@@ -276,9 +276,10 @@ white, so your room is grey around the window. If it stutters, lower the resolut
 Valve's Steam Frame has its own app: **`Mario64MR-SteamFrame.apk`** in [Releases](../../releases). The game you
 make from your ROM is the same for both headsets; only the app is different.
 
-> **Not tested on a Steam Frame yet.** I don't have one: the app is built from Valve's documentation for its
-> Android support (Lepton) and OpenXR. If you try it, please [open an issue](../../issues) saying how it went, with
-> the `[Mario64MR]` lines from `adb logcat -s Unity` if something's wrong.
+> **Tested on a Steam Frame 2026-11-10** with Lepton v3.0.5 (rootfs v3.0.3): the cartridge, the title screen,
+> passthrough, the full game, carrying Mario in and out of the window and the diorama (on the floor) all work.
+> If something's wrong on yours, please [open an issue](../../issues) with the `[Mario64MR]` lines from
+> `adb logcat -s Unity`.
 
 What's different from the Quest:
 
@@ -292,7 +293,21 @@ What's different from the Quest:
 - **Grey passthrough**: the Frame's cameras are black and white.
 - In the options, **refresh rate** and **sharpening** do nothing: the Frame runs at its own rate.
 
-To install it:
+### On the Frame itself (no computer needed)
+
+1. On the Frame, switch to desktop mode, and put your **Super Mario 64 (USA)** ROM in **Downloads** (a `.z64`,
+   `.v64` or `.n64`, or a `.zip` with one inside).
+2. Download [`Install-Mario64MR.desktop`](steam-frame/Install-Mario64MR.desktop) (Raw › save it) and
+   double-click it (Execute, if it asks).
+3. A terminal opens and does the rest: it makes the game from your ROM on the Frame (the first time about
+   10 minutes and a 700 MB download), installs the app, and adds **Mario 64 MR** to your Steam library. If it
+   can't find your ROM, it asks you to choose it.
+4. Return to Gaming Mode and start Mario 64 MR from your Library.
+
+Run it again to update. Everything goes in `~/.local/share/mario64mr` (delete it, and the Steam shortcut, to
+remove Mario 64 MR); the log is `~/.local/share/mario64mr/install.log`.
+
+### From a computer
 
 1. On the Frame, turn on Developer Mode, then start **Lepton Development** from your Library (an Android home
    screen opens). Keep the Frame on the same Wi-Fi as your computer.
@@ -308,7 +323,21 @@ To install it:
      python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push --frame --apk Mario64MR-SteamFrame.apk
      ```
 
-     Or `--frame 192.168.1.23` with the Frame's IP address.
+     Or `--frame 192.168.1.23` with the Frame's IP address. If `frame` isn't found, the installer also tries
+     `frame.lan`.
+
+   > **If the app shows nothing when you open it on the Frame and `adb logcat -s Unity` has
+   > `xrCreateInstance: XR_ERROR_FILE_ACCESS_ERROR`**, Lepton's OpenXR/Vulkan API layer libraries
+   > (`libVkLayer_VALVE_fdm_injection.so`, `libVkLayer_fossilize.so`) are sitting in the app's lib directory as
+   > zero-byte stubs. Plain `adb install` leaves them that way; Lepton only generates the bind-mount config that
+   > fills them in when you install with its own `install_app` command. Two fixes:
+   >
+   > - On the Frame (over SSH):
+   >   `~/.steam/steam/steamapps/common/Lepton/lepton install_app dev /path/to/Mario64MR-SteamFrame.apk`
+   > - From your computer, if you have SSH set up to the Frame (public key in its `~/.ssh/authorized_keys`):
+   >   add `--lepton-install steamos@frame.lan` to the `install_mario64mr.py` line above. The installer will
+   >   `scp` the APK to the Frame and run `lepton install_app` for you.
+
 3. Start Mario 64 MR from Lepton Development's home screen.
 
 To push by hand instead, `adb connect frame` first, then follow [Pushing by hand](#pushing-by-hand).
