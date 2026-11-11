@@ -174,11 +174,26 @@ Type=Application
 Categories=Game;
 EOF
 chmod +x "$DIR/Mario 64 MR.desktop"
-if [ -f "$DIR/.added-to-steam" ]; then
+in_steam() {  # is there a Steam shortcut that starts $DIR/launch.sh? (also after one was deleted: add it again)
+    python3 - "$DIR/launch.sh" "${HOME}"/.steam/steam/userdata/*/config/shortcuts.vdf <<'EOF'
+import re, sys
+launcher = sys.argv[1].encode()
+for path in sys.argv[2:]:
+    try:
+        data = open(path, "rb").read()
+    except OSError:
+        continue
+    # binary VDF: each shortcut has an "Exe" string field, \x01Exe\x00<value>\x00
+    if any(launcher in m.group(1) for m in re.finditer(rb"\x01Exe\x00([^\x00]*)\x00", data, re.I)):
+        sys.exit(0)
+sys.exit(1)
+EOF
+}
+rm -f "$DIR/.added-to-steam"
+if in_steam; then
     echo "Already in your Steam library."
 else
     steamos-add-to-steam "$DIR/Mario 64 MR.desktop" || fail "couldn't add it to Steam. Is Steam running?"
-    touch "$DIR/.added-to-steam"
 fi
 
 say "Done"

@@ -35,6 +35,7 @@ import hashlib
 import os
 import platform
 import re
+import shlex
 import shutil
 import stat
 import struct
@@ -507,8 +508,8 @@ def add_label(picture, out):
 
 
 def resolve_frame_host(host):
-    """`frame` mDNS doesn't resolve on every network/OS (NixOS was observed without it); fall back to `frame.lan`,
-    which Avahi's default .local vs .lan can cover. Anything with a dot or looking like an IP is left alone."""
+    """The bare `frame` hostname doesn't resolve on every computer; fall back to `frame.lan`, which many routers'
+    DNS provides for devices on the network. A host given explicitly (a name or an IP address) is left alone."""
     if host != "frame":
         return host
     import socket
@@ -561,17 +562,19 @@ def install_apk_via_lepton(apk, ssh_target, context="dev"):
                  f"  Falling back: install the APK by hand with `lepton install_app dev {apk.name}` on the Frame,\n"
                  f"  or re-run without --lepton-install.\n  ssh said: {probe.stderr.strip() or probe.stdout.strip()}")
     print(f"Copying {apk.name} to the Frame...", flush=True)
-    remote = f"/tmp/{apk.name}"
+    # A fixed name without spaces: scp's SFTP mode (OpenSSH 9+) takes remote paths literally while older scp
+    # passes them through the remote shell, so a name like "Mario64MR-SteamFrame (1).apk" can't be quoted for both
+    remote = "/tmp/mario64mr-install.apk"
     run(["scp", "-o", "BatchMode=yes", str(apk), f"{ssh_target}:{remote}"])
     print(f"Installing with Lepton ({context} context)...", flush=True)
-    result = subprocess.run(ssh_cmd + [ssh_target, f"{LEPTON_PATH} install_app {context} {remote}"],
+    result = subprocess.run(ssh_cmd + [ssh_target, f"{LEPTON_PATH} install_app {shlex.quote(context)} {shlex.quote(remote)}"],
                             capture_output=True, text=True)
     sys.stdout.write(result.stdout)
     sys.stdout.write(result.stderr)
     if result.returncode != 0 or "Success" not in result.stdout + result.stderr:
         sys.exit(f"Lepton install_app failed (exit {result.returncode}).")
     # The install auto-starts the activity; the push step below will push data and force-stop once it's time.
-    subprocess.run(ssh_cmd + [ssh_target, f"rm -f {remote}"], capture_output=True)
+    subprocess.run(ssh_cmd + [ssh_target, f"rm -f {shlex.quote(remote)}"], capture_output=True)
 
 
 def push(out, wait=False, apk=None, frame=None, lepton_ssh=None):

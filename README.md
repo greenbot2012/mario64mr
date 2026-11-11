@@ -323,8 +323,8 @@ remove Mario 64 MR); the log is `~/.local/share/mario64mr/install.log`.
      python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push --frame --apk Mario64MR-SteamFrame.apk
      ```
 
-     Or `--frame 192.168.1.23` with the Frame's IP address. On systems where `frame` alone doesn't resolve
-     (NixOS was observed without mDNS by default), the installer also tries `frame.lan` before giving up.
+     Or `--frame 192.168.1.23` with the Frame's IP address. If `frame` isn't found, the installer also tries
+     `frame.lan`.
 
    > **If the app shows nothing when you open it on the Frame and `adb logcat -s Unity` has
    > `xrCreateInstance: XR_ERROR_FILE_ACCESS_ERROR`**, Lepton's OpenXR/Vulkan API layer libraries
