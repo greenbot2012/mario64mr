@@ -3,7 +3,7 @@
 <p align="center"><img src="media/mario-out-of-the-game.gif" width="400" alt="Reaching into the game window, picking Mario up and setting him down on a real table, where he runs around and jumps back in"></p>
 
 Mixed reality Super Mario 64 for Meta Quest 3, 3S and 2 (and the
-[Steam Frame](#steam-frame)). A Super Mario 64 cartridge sits in your room. Stretch it
+[Steam Frame](#steam-frame), and, experimental, [PICO](#pico-experimental)). A Super Mario 64 cartridge sits in your room. Stretch it
 open with your hands into a window onto the game, then play the whole game with the Touch controller in your right
 hand. Your left hand reaches in, picks Mario up, and carries him out onto your desk.
 
@@ -45,6 +45,7 @@ The tool in this repository makes the game from your ROM on your own computer, a
 | --- | --- |
 | [Releases](../../releases) › `Mario64MR.apk` | The app |
 | [Releases](../../releases) › `Mario64MR-SteamFrame.apk` | The app for the [Steam Frame](#steam-frame) |
+| [Releases](../../releases) › `Mario64MR-Pico.apk` | The app for PICO headsets ([experimental](#pico-experimental)) |
 | `install_mario64mr.bat` | On Windows: double-click it, and it does everything below for you |
 | `install_mario64mr.py` | Makes the game from your ROM and pushes it to the headset |
 | `native/` | Mario 64 MR's changes to the game's sources, applied by the tool |
@@ -338,6 +339,35 @@ from Windows, without Lepton, it would open to nothing), and sends you there whe
 > `~/.steam/steam/steamapps/common/Lepton/lepton install_app dev /path/to/Mario64MR-SteamFrame.apk`
 
 To push the game by hand instead, `adb connect frame` first, then follow [Pushing by hand](#pushing-by-hand).
+
+## PICO (experimental)
+
+PICO headsets have their own app: **`Mario64MR-Pico.apk`** in [Releases](../../releases). The game you make from
+your ROM is the same as for the Quest; only the app is different.
+
+> **Experimental.** Tested on one PICO headset (PICO OS 6) with a room mesh: hand tracking, passthrough, the full
+> game, Mario in and out of the window, and the diorama work. Not tested on a PICO 4 yet. If you try it, please
+> [open an issue](../../issues) saying how it went, with the `[Mario64MR]` lines from `adb logcat -s Unity` if
+> something's wrong.
+
+What's different from the Quest:
+
+- A PICO tracks **your hands or the controllers, not both at once**. With your hands, it's as on the Quest: pinch to
+  open the cartridge and to take Mario out. With the controllers (or once you pick them up), it plays like the
+  [Steam Frame](#steam-frame): the left controller is your left hand (hold its grip to pick Mario up), left X or Y
+  is R, and Mario's gloves hold the controllers. An Xbox controller works too.
+- **The room**: on headsets with a room mesh (like the PICO 4 Ultra) the cartridge lands on your table and Mario
+  runs on it. On a PICO 4 it uses your Room Capture scan (floor, walls and furniture) if you made one; without
+  either, just the floor.
+- In the options, **sharpening** does nothing: PICO sets it when the app is built.
+
+To install it, follow [Install](#install) with `Mario64MR-Pico.apk` in place of `Mario64MR.apk`:
+
+1. Turn on developer mode (Settings › General › About: click Software Version until it says you're a developer,
+   then Settings › Developer › USB Debugging) and connect the headset with USB.
+2. **Windows**: put `Mario64MR-Pico.apk` in your Downloads and double-click `install_mario64mr.bat`.
+   **Mac or Linux**: `python3 install_mario64mr.py "Super Mario 64 (USA).z64" --push --apk Mario64MR-Pico.apk`
+3. Allow the room permission when it asks, and start Mario 64 MR from your Library (Unknown sources).
 
 ## Troubleshooting
 
