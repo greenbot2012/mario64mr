@@ -82,12 +82,12 @@ Write-Host "Mario 64 MR: make the game from your ROM and put it on your headset"
 # Frame's isn't installed from Windows: through adb, without the Frame's Lepton, it opens to nothing there. Its
 # installer runs on the Frame itself (steam-frame/Install-Mario64MR.desktop), so that's where this sends you.
 $apk = $null
-if (-not $NoPush) {
+if (-not $NoPush -and -not $Check) {
     $folders = @($Repo, (Join-Path $env:USERPROFILE "Downloads"))
     $apk = Get-ChildItem -LiteralPath $folders -Filter "Mario64MR*.apk" -File -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
 }
-if ($Frame -or ($apk -and $apk.Name -like "*SteamFrame*")) {
+if (-not $Check -and ($Frame -or ($apk -and $apk.Name -like "*SteamFrame*"))) {
     Write-Host ""
     Write-Host "This is the Steam Frame's app ($(if ($apk) { $apk.Name } else { "-Frame" })): install it on the Frame itself instead." -ForegroundColor Yellow
     Write-Host "From Windows it would open to nothing on the Frame (it has to be installed through the Frame's Lepton)."
