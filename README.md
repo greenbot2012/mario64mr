@@ -69,8 +69,7 @@ The tool in this repository makes the game from your ROM on your own computer, a
     Windows' limit.)
 - The Android NDK. The tool finds one installed by Android Studio, Homebrew (`brew install --cask android-ndk`) or
   Unity. Otherwise it downloads r27c from Google the first time (about 700 MB, 2 GB unpacked).
-## Update
-Use an ADB Command or sidequest on the apk to update to a new version.
+
 ## Install
 
 ### On Windows
@@ -167,6 +166,19 @@ adb push my-label.png /sdcard/Android/data/com.lucasmartinic.mario64mr/files/lab
 
 To go back to the plain label, delete it:
 `adb shell rm /sdcard/Android/data/com.lucasmartinic.mario64mr/files/label.png`
+
+## Updating
+
+Download the new `Mario64MR.apk` from [Releases](../../releases) and install it over the old one, with the headset
+connected over USB:
+
+```
+adb install -r -g Mario64MR.apk
+```
+
+(or drag it onto SideQuest). The game you made from your ROM stays on the headset, so you don't need to run the
+installer again. On PICO it's `Mario64MR-Pico.apk`; on the Steam Frame, run the [installer on the Frame](#on-the-frame-itself-no-computer-needed)
+again.
 
 ## Playing
 
