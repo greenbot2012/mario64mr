@@ -327,8 +327,8 @@ itself, over SSH: installed with a plain `adb install`, it opens to nothing on t
    If `frame` isn't found, the installer also tries `frame.lan`.
 3. Start Mario 64 MR from Lepton Development's home screen.
 
-On **Windows**, `install_mario64mr.bat` still installs the app with a plain `adb install`, so use the installer on
-the Frame instead.
+On **Windows**, use the installer on the Frame: `install_mario64mr.bat` doesn't install the Frame's app (installed
+from Windows, without Lepton, it would open to nothing), and sends you there when it finds it.
 
 > **If the app shows nothing when you open it on the Frame** (and `adb logcat -s Unity` has
 > `xrCreateInstance: XR_ERROR_FILE_ACCESS_ERROR`), it was installed with a plain `adb install`, which leaves

@@ -16,8 +16,7 @@ param(
     [string]$Rom,          # your ROM (else a file dialog asks for it)
     [switch]$NoPush,       # make the game but don't send it to the headset
     [switch]$Check,        # only check the ROM
-    [string]$Frame         # a Steam Frame's hostname or IP address, to send it there over Wi-Fi (with the Frame's
-                           # app, Mario64MR-SteamFrame.apk, it's "frame" unless given)
+    [string]$Frame         # (a Steam Frame: not from Windows, see below)
 )
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"  # (downloads are many times slower with PowerShell's progress bar)
@@ -79,6 +78,27 @@ function Describe-Rom($path) {
 
 Write-Host "Mario 64 MR: make the game from your ROM and put it on your headset" -ForegroundColor Cyan
 
+# The app to install with the game: Mario64MR.apk here (next to the README) or in Downloads, the newest. The Steam
+# Frame's isn't installed from Windows: through adb, without the Frame's Lepton, it opens to nothing there. Its
+# installer runs on the Frame itself (steam-frame/Install-Mario64MR.desktop), so that's where this sends you.
+$apk = $null
+if (-not $NoPush) {
+    $folders = @($Repo, (Join-Path $env:USERPROFILE "Downloads"))
+    $apk = Get-ChildItem -LiteralPath $folders -Filter "Mario64MR*.apk" -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+}
+if ($Frame -or ($apk -and $apk.Name -like "*SteamFrame*")) {
+    Write-Host ""
+    Write-Host "This is the Steam Frame's app ($(if ($apk) { $apk.Name } else { "-Frame" })): install it on the Frame itself instead." -ForegroundColor Yellow
+    Write-Host "From Windows it would open to nothing on the Frame (it has to be installed through the Frame's Lepton)."
+    Write-Host "No computer needed:"
+    Write-Host "  1. On the Frame, in desktop mode, put your Super Mario 64 (USA) ROM in Downloads."
+    Write-Host "  2. Download Install-Mario64MR.desktop (in this repository's steam-frame folder) and double-click it."
+    Write-Host "  See the README's Steam Frame section: https://github.com/lucas-martinic/mario64mr#steam-frame"
+    Write-Host "(For a Quest, put Mario64MR.apk, not Mario64MR-SteamFrame.apk, in your Downloads.)"
+    exit 0
+}
+
 # 1. The ROM, checked before anything is downloaded
 if (-not $Rom) {
     Add-Type -AssemblyName System.Windows.Forms
@@ -139,16 +159,10 @@ if (-not $NoPush) {
     }
 }
 
-# The app, to install with the game: Mario64MR.apk here (next to the README) or in Downloads, the newest
-$apk = $null
+# The app, to install with the game (found above)
 if (-not $NoPush) {
-    $folders = @($Repo, (Join-Path $env:USERPROFILE "Downloads"))
-    $apk = Get-ChildItem -LiteralPath $folders -Filter "Mario64MR*.apk" -File -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if ($apk) { Write-Host "The app: $($apk.FullName) (installed on the headset with the game)" }
     else { Write-Host "No Mario64MR.apk here or in Downloads: if the app isn't on the headset yet, download it from the Releases page first." -ForegroundColor Yellow }
-    if (-not $Frame -and $apk -and $apk.Name -like "*SteamFrame*") { $Frame = "frame" }
-    if ($Frame) { Write-Host "To the Steam Frame at $Frame, over Wi-Fi: start Lepton Development on it (Developer Mode on)." -ForegroundColor Cyan }
 }
 
 # 4. Make the game, and send it to the headset
@@ -158,7 +172,7 @@ $env:M64_ROM = $Rom
 $env:M64_WORK = Join-Path $Root "work"
 $env:M64_ADB = if ($adbDir) { $adbDir } else { "" }
 $env:M64_PUSH = if ($NoPush) { "" } else { "1" }
-$env:M64_FRAME = if ($Frame -and -not $NoPush) { $Frame } else { "" }
+$env:M64_FRAME = ""
 # (a script, the paths in the environment: Windows PowerShell drops quotes inside the arguments it passes)
 & $Bash -l (Join-Path $PSScriptRoot "make_game.sh").Replace('\', '/')
 if ($LASTEXITCODE -ne 0) { Fail "Making the game failed (see above). Running install_mario64mr.bat again picks up where it stopped." }
