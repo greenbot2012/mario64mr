@@ -16,9 +16,9 @@ REVISION = "d7ca2c04364a6dd0dac58b47151e04e26887e6f0"
 
 # The options menu's own words (unity_options.inc.h): menu titles in the HUD's capitals
 MR_STRINGS = """
-#define TEXT_MR_GRAPHICS     _("GRAPHICS")
-#define TEXT_MR_BRING_BACK   _("Bring Mario back")
-#define TEXT_MR_REFRESH      _("Refresh rate")
+#define TEXT_MR_GRAPHICS     _("Graphics Settings")
+#define TEXT_MR_BRING_BACK   _("Reset Mario")
+#define TEXT_MR_REFRESH      _("Refresh Rate")
 #define TEXT_MR_RESOLUTION   _("Resolution")
 #define TEXT_MR_ANTIALIASING _("Anti-aliasing")
 #define TEXT_MR_FOVEATION    _("Foveation")
@@ -45,7 +45,7 @@ MR_STRINGS = """
 #define TEXT_MR_MEDIUM  _("Medium")
 #define TEXT_MR_HIGH    _("High")
 #define TEXT_MR_HIGHTOP _("High (top)")
-#define TEXT_MR_N64     _("N64 (unfiltered)")
+#define TEXT_MR_N64     _("OG N64 (unfiltered)")
 #define TEXT_MR_MIPMAPS _("Mipmaps")
 #define TEXT_MR_ANISO2  _("Anisotropic 2x")
 #define TEXT_MR_ANISO4  _("Anisotropic 4x")
